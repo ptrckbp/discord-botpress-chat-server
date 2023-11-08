@@ -1,0 +1,21 @@
+spec:
+  name: discord-botpress-chat-server
+  services:
+  - name: discord-botpress-chat-server
+    environment_slug: node-js
+    git:
+      branch: main
+      repo_clone_url: https://github.com/ptrckbp/discord-botpress-chat-server.git
+    envs:
+    - key: APP_ID
+      value: "Discord App ID"
+      type: SECRET
+    - key: DISCORD_TOKEN
+      value: "Discord Bot Token"
+      type: SECRET
+    - key: PUBLIC_KEY
+      value: "Discord Public Key"
+      type: SECRET
+    - key: BOTPRESS_CHAT_WEBHOOK_ID
+      value: "Botpress Chat Webhook ID"
+      type: SECRET

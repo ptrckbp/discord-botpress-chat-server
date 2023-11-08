@@ -1,0 +1,21 @@
+{
+  "name": "discord-botpress-chat",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@botpress/chat": "^0.0.4",
+    "dotenv": "^16.3.1",
+    "eris": "^0.17.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}

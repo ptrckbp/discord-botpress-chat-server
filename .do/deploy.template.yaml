@@ -6,7 +6,6 @@ spec:
     git:
       branch: main
       repo_clone_url: https://github.com/ptrckbp/discord-botpress-chat-server.git
-    http_port: 3000
     envs:
     - key: APP_ID
       scope: RUN_TIME

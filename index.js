@@ -1,6 +1,7 @@
 import "dotenv/config";
 import Eris from "eris";
 import { Client } from "@botpress/chat";
+import { startHealthCheckBeacon } from "./src/healthcheck.js";
 const myWebhookId = process.env.BOTPRESS_WEBHOOK_ID;
 
 const client = new Client({
@@ -14,6 +15,7 @@ const bot = new Eris(process.env.DISCORD_TOKEN, {
 bot.on("ready", () => {
   // When the bot is ready
   console.log("Ready!"); // Log "Ready!"
+  startHealthCheckBeacon()
 });
 
 bot.on("error", (err) => {
@@ -60,4 +62,3 @@ bot.on("messageCreate", async (msg) => {
 });
 
 bot.connect(); // Get the bot to connect to Discord
-

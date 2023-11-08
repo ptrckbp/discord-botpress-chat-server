@@ -42,8 +42,8 @@ bot.on("messageCreate", async (msg) => {
     xChatKey,
     conversationId: conversation.id,
     payload: {
-      type: "text",
-      text: msg.content,
+      type: "custom",
+      payload: msg
     },
   });
 

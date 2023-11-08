@@ -2,7 +2,7 @@ import "dotenv/config";
 import Eris from "eris";
 import { Client } from "@botpress/chat";
 import { startHealthCheckBeacon } from "./src/healthcheck.js";
-const myWebhookId = process.env.BOTPRESS_WEBHOOK_ID;
+const myWebhookId = process.env.BOTPRESS_CHAT_WEBHOOK_ID;
 
 const client = new Client({
   apiUrl: `https://chat.botpress.cloud/${myWebhookId}`,

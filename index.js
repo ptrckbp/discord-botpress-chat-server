@@ -1,53 +1,66 @@
 import "dotenv/config";
-import Eris from "eris";
-import { Client } from "@botpress/chat";
+import { Client as BotpressClient } from "@botpress/chat";
 import { startHealthCheckBeacon } from "./src/healthcheck.js";
 const myWebhookId = process.env.BOTPRESS_CHAT_WEBHOOK_ID;
+import { Client, Events, GatewayIntentBits } from "discord.js";
 
-const client = new Client({
+const botpressClient = new BotpressClient({
   apiUrl: `https://chat.botpress.cloud/${myWebhookId}`,
 });
 
-const bot = new Eris(process.env.DISCORD_TOKEN, {
-  intents: ["guildMessages"],
+const client = new Client({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildMembers,
+  ],
 });
 
-bot.on("ready", () => {
-  // When the bot is ready
-  console.log("Ready!"); // Log "Ready!"
-  startHealthCheckBeacon()
-});
+client.once(Events.ClientReady, startHealthCheckBeacon);
 
-bot.on("error", (err) => {
-  console.error(err); // or your preferred logger
-});
-
-bot.on("messageCreate", async (msg) => {
-  // When a message is created
-  if (msg.author.bot) {
+client.on(Events.MessageCreate, async (interaction) => {
+  // ignore messages that are not in threads
+  if (interaction.channel.type !== 11) {
     return;
   }
 
+  // ignore bots
+  if (interaction.author.bot) {
+    return;
+  }
+
+  const clonedInteraction = JSON.parse(JSON.stringify(interaction));
+  clonedInteraction.author = interaction.author.toJSON();
+  clonedInteraction.userRoles = interaction.member?.roles.cache.map(
+    (a) => a.name
+  );
+  clonedInteraction.parentChannelName = interaction.channel.parent?.name;
+  clonedInteraction.channelName = interaction.channel.name;
+  // clonedInteraction.channelType = interaction.channel.type;
+  // clonedInteraction.parentCchannelType = interaction.channel.parent?.type;
+
+
   // send to botpress, wait for response, send response.
-  const { user, key: xChatKey } = await client.createUser({});
+  const { user, key: xChatKey } = await botpressClient.createUser({});
 
   // 1. create a conversation
-  const { conversation } = await client.createConversation({
+  const { conversation } = await botpressClient.createConversation({
     xChatKey,
     participants: [user.id],
   });
 
   // 2. send the message to botpress
-  const { message } = await client.createMessage({
+  const { message } = await botpressClient.createMessage({
     xChatKey,
     conversationId: conversation.id,
     payload: {
       type: "custom",
-      payload: msg
+      payload: clonedInteraction,
     },
   });
 
-  const listener = await client.listenConversation({
+  const listener = await botpressClient.listenConversation({
     id: conversation.id,
     xChatKey,
   });
@@ -57,8 +70,8 @@ bot.on("messageCreate", async (msg) => {
       // message created by my current user, ignoring...
       return;
     }
-    await bot.createMessage(msg.channel.id, ev.payload.text);
+    interaction.reply(ev.payload.text.slice(0, 2000));
   });
 });
 
-bot.connect(); // Get the bot to connect to Discord
+client.login(process.env.DISCORD_TOKEN);

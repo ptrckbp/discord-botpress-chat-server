@@ -3,6 +3,7 @@ import { Client as BotpressClient } from "@botpress/chat";
 import { startHealthCheckBeacon } from "./src/healthcheck.js";
 const myWebhookId = process.env.BOTPRESS_CHAT_WEBHOOK_ID;
 import { Client, Events, GatewayIntentBits } from "discord.js";
+import jwt from "jsonwebtoken";
 
 const botpressClient = new BotpressClient({
   apiUrl: `https://chat.botpress.cloud/${myWebhookId}`,
@@ -17,9 +18,30 @@ const client = new Client({
   ],
 });
 
+
+const listeningToConversationsSet = new Set([])
+
+const getOrCreateUser = async (xChatKey) => {
+  try {
+    const existingUser = await botpressClient.getUser({ xChatKey });
+    return existingUser.user;
+  } catch (error) {
+    const newlyCreatedUser = await botpressClient.createUser({
+      xChatKey,
+      fid: authorFid,
+    });
+    return newlyCreatedUser.user;
+  }
+}
+
+
 client.once(Events.ClientReady, startHealthCheckBeacon);
 
 client.on(Events.MessageCreate, async (interaction) => {
+  if (interaction.guildId != process.env.DISCORD_GUILD_ID) {
+    return;
+  }
+
   // ignore messages that are not in threads
   if (interaction.channel.type !== 11) {
     return;
@@ -42,16 +64,23 @@ client.on(Events.MessageCreate, async (interaction) => {
 
 
   // send to botpress, wait for response, send response.
-  const { user, key: xChatKey } = await botpressClient.createUser({});
+
+  const authorFid = clonedInteraction.authorId.toString();
+  const xChatKey = jwt.sign(
+    { fid : authorFid },
+    process.env.BOTPRESS_CHAT_ENCRYPTION_KEY
+  );
+
+  const user = await getOrCreateUser(xChatKey)
 
   // 1. create a conversation
-  const { conversation } = await botpressClient.createConversation({
+  const { conversation } = await botpressClient.getOrCreateConversation({
     xChatKey,
-    participants: [user.id],
+    fid: clonedInteraction.channelId,
   });
 
   // 2. send the message to botpress
-  const { message } = await botpressClient.createMessage({
+  await botpressClient.createMessage({
     xChatKey,
     conversationId: conversation.id,
     payload: {
@@ -59,6 +88,11 @@ client.on(Events.MessageCreate, async (interaction) => {
       payload: clonedInteraction,
     },
   });
+
+  if (listeningToConversationsSet.has(conversation.id)) {
+    return;
+  }
+  listeningToConversationsSet.add(conversation.id)
 
   const listener = await botpressClient.listenConversation({
     id: conversation.id,

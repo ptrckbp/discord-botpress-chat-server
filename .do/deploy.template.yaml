@@ -15,3 +15,7 @@ spec:
       scope: RUN_TIME
     - key: BOTPRESS_CHAT_WEBHOOK_ID
       scope: RUN_TIME
+    - key: DISCORD_GUILD_ID
+      scope: RUN_TIME
+    - key: BOTPRESS_CHAT_ENCRYPTION_KEY
+      scope: RUN_TIME

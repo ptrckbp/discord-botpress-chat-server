@@ -1,21 +1,21 @@
 spec:
-  name: discord-botpress-chat-server
-  services:
-  - name: discord-botpress-chat-server
-    environment_slug: node-js
-    git:
-      branch: main
-      repo_clone_url: https://github.com/ptrckbp/discord-botpress-chat-server.git
-    envs:
-    - key: APP_ID
-      scope: RUN_TIME
-    - key: DISCORD_TOKEN
-      scope: RUN_TIME
-    - key: PUBLIC_KEY
-      scope: RUN_TIME
-    - key: BOTPRESS_CHAT_WEBHOOK_ID
-      scope: RUN_TIME
-    - key: DISCORD_GUILD_ID
-      scope: RUN_TIME
-    - key: BOTPRESS_CHAT_ENCRYPTION_KEY
-      scope: RUN_TIME
+    name: discord-botpress-chat-server
+    services:
+        - name: discord-botpress-chat-server
+          environment_slug: node-js
+          git:
+              branch: main
+              repo_clone_url: https://github.com/ptrckbp/discord-botpress-chat-server.git
+          envs:
+              - key: APP_ID
+                scope: RUN_TIME
+              - key: DISCORD_BOT_TOKEN
+                scope: RUN_TIME
+              - key: APP_PUBLIC_KEY
+                scope: RUN_TIME
+              - key: BOTPRESS_CHAT_WEBHOOK_ID
+                scope: RUN_TIME
+              - key: DISCORD_SERVER_ID
+                scope: RUN_TIME
+              - key: BOTPRESS_CHAT_ENCRYPTION_KEY
+                scope: RUN_TIME

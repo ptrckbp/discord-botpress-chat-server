@@ -1,23 +1,23 @@
 {
-  "name": "discord-botpress-chat",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "type": "module",
-  "scripts": {
-    "start": "node index.js",
-    "dev": "nodemon index.js"
-  },
-  "author": "",
-  "license": "MIT",
-  "dependencies": {
-    "@botpress/chat": "^0.2.1",
-    "discord.js": "^14.13.0",
-    "dotenv": "^16.3.1",
-    "express": "^4.18.2",
-    "jsonwebtoken": "^9.0.2"
-  },
-  "devDependencies": {
-    "nodemon": "^3.0.1"
-  }
+	"name": "discord-botpress-chat",
+	"version": "1.0.0",
+	"description": "",
+	"main": "index.js",
+	"type": "module",
+	"scripts": {
+		"start": "node index.js",
+		"dev": "nodemon index.js"
+	},
+	"author": "",
+	"license": "MIT",
+	"dependencies": {
+		"@botpress/chat": "^0.2.1",
+		"discord.js": "^14.13.0",
+		"dotenv": "^16.3.1",
+		"express": "^4.18.2",
+		"jsonwebtoken": "^9.0.2"
+	},
+	"devDependencies": {
+		"nodemon": "^3.0.1"
+	}
 }

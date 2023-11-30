@@ -50,9 +50,23 @@ client.once(Events.ClientReady, startHealthCheckBeacon);
 client.on(Events.MessageCreate, async (interaction) => {
 	console.log("There's a new user message!");
 
+	// check out the interaction.example.json file to see what's inside the interaction object
+
 	// ignore messages that are not in the server
 	if (interaction.guildId != process.env.DISCORD_SERVER_ID) {
 		console.log('Ignoring message from other server');
+		return;
+	}
+
+	// ignore messages from system
+	if (interaction.system) {
+		console.log('Ignoring system message');
+		return;
+	}
+
+	// ignore messages from bots
+	if (interaction.author.bot) {
+		console.log('Ignoring message from bot');
 		return;
 	}
 
@@ -63,14 +77,9 @@ client.on(Events.MessageCreate, async (interaction) => {
 		return;
 	}
 
-	// ignore messages from bots
-	if (interaction.author.bot) {
-		console.log('Ignoring message from bot');
-		return;
-	}
-
 	const clonedInteraction = JSON.parse(JSON.stringify(interaction));
 
+	const author = interaction.author.toJSON();
 	const content = interaction.cleanContent;
 	const authorFid = clonedInteraction.authorId.toString();
 	const guildRoles = interaction.member?.roles.cache
@@ -96,6 +105,7 @@ client.on(Events.MessageCreate, async (interaction) => {
 	});
 
 	// 3. sends the message to botpress
+	console.log('Sending message to Botpress...');
 	await botpressClient.createMessage({
 		xChatKey,
 		conversationId: conversation.id,
@@ -130,8 +140,11 @@ client.on(Events.MessageCreate, async (interaction) => {
 
 	// 5. sends messages from botpress to discord
 	listener.on('message_created', async (ev) => {
+		console.log('Received message from Botpress...');
+
+		// ignore messages from current user
 		if (ev.userId === botpressUser.id) {
-			// message created by my current user, ignoring...
+			console.log('Ignoring message from current user');
 			return;
 		}
 		interaction.reply(ev.payload.text.slice(0, 2000));

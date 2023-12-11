@@ -241,7 +241,7 @@ client.on(Events.MessageUpdate, async (oldMessage, newMessage) => {
 	// 2. sends the payload to ignore to botpress
 	console.log('Sent instructions to ignore to Botpress...');
 	await axios.post(
-		'https://webhook.botpress.cloud/c526aeb5-d71f-4346-9ad7-adb45e4f7944/ignore-conversation',
+		`https://webhook.botpress.cloud/${process.env.DISCORD_WEBHOOK_WEBHOOK_ID}/ignore-conversation`,
 		{
 			conversationId: conversation.id,
 			reason: 'The user edited some messages',

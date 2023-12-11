@@ -57,7 +57,7 @@ client.on(Events.MessageCreate, async (interaction) => {
 	// check if there is an attachment that's not a link preview
 	if (interaction.attachments.size > 0) {
 		console.log('Ignoring message with attachments');
-		interaction.reply("I can't process messages with attachments");
+		// interaction.reply("I can't process messages with attachments");
 		return;
 	}
 

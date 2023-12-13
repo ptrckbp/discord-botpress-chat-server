@@ -54,13 +54,6 @@ client.once(Events.ClientReady, startHealthCheckBeacon);
 client.on(Events.MessageCreate, async (interaction) => {
 	console.log("There's a new user message!:", interaction.cleanContent);
 
-	// check if there is an attachment that's not a link preview
-	if (interaction.attachments.size > 0) {
-		console.log('Ignoring message with attachments');
-		// interaction.reply("I can't process messages with attachments");
-		return;
-	}
-
 	// check out the interaction.example.json file to see what's inside the interaction object
 
 	// ignore messages that are not in the server
@@ -115,6 +108,16 @@ client.on(Events.MessageCreate, async (interaction) => {
 		fid: channelId,
 	});
 
+	const messagePayload = {};
+
+	// check if there is an attachment that's not a link preview
+	if (interaction.attachments.size > 0) {
+		console.log('Ignoring message with attachments');
+		messagePayload.action = 'ignore_conversation';
+	} else {
+		messagePayload.content = content;
+	}
+
 	// 3. sends the message to botpress
 	console.log('Sending message to Botpress...');
 	await botpressClient.createMessage({
@@ -136,7 +139,7 @@ client.on(Events.MessageCreate, async (interaction) => {
 					threadId: channelId, // added
 					url: url,
 				},
-				message: { content: content },
+				message: messagePayload,
 			},
 		},
 	});
@@ -239,14 +242,25 @@ client.on(Events.MessageUpdate, async (oldMessage, newMessage) => {
 	});
 
 	// 2. sends the payload to ignore to botpress
-	console.log('Sent instructions to ignore to Botpress...');
-	await axios.post(
-		`https://webhook.botpress.cloud/${process.env.DISCORD_WEBHOOK_WEBHOOK_ID}/ignore-conversation`,
-		{
-			conversationId: conversation.id,
-			reason: 'The user edited some messages',
-		}
+	console.log(
+		'Sending message instructions to ignore conversation to Botpress...'
 	);
+	await botpressClient.createMessage({
+		xChatKey,
+		conversationId: conversation.id,
+		payload: {
+			type: 'custom',
+			payload: {
+				conversation: {
+					type: 'thread',
+					threadId: channelId, // added
+				},
+				message: {
+					action: 'ignore_conversation',
+				},
+			},
+		},
+	});
 
 	// 3. replies to the user
 	// oldMessage.reply(

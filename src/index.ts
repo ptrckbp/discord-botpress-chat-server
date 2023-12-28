@@ -81,8 +81,7 @@ discordClient.once(Events.ClientReady, startHealthCheckBeacon);
 
 interface ParsedDiscordInteraction {
 	content: string;
-	author: DiscordUser;
-	authorId: string;
+	author: DiscordUser | null;
 	guildRoles: string;
 	parentChannelName: string;
 	channelName: string;
@@ -98,20 +97,23 @@ discordClient.on(Events.MessageCreate, async (interaction) => {
 		return;
 	}
 
-	const clonedInteraction = JSON.parse(JSON.stringify(interaction));
-
 	const parsedInteraction: ParsedDiscordInteraction =
-		parseDiscordInteraction(clonedInteraction);
+		parseDiscordInteraction(interaction);
+
+	if (!parsedInteraction.author) {
+		console.log('Author data not found in interaction');
+		return;
+	}
 
 	const xChatKey = jwt.sign(
-		{ fid: parsedInteraction.authorId },
+		{ fid: parsedInteraction.author.id },
 		process.env.BOTPRESS_CHAT_ENCRYPTION_KEY || ''
 	);
 
 	// 1. gets or creates a user in botpress
 	const botpressUser = await getOrCreateUser(
 		xChatKey,
-		parsedInteraction.authorId
+		parsedInteraction.author.id
 	);
 
 	// 2. creates a conversation
@@ -224,7 +226,7 @@ discordClient.on(Events.MessageUpdate, async (oldMessage, newMessage) => {
 		parseDiscordInteraction(oldMessage);
 
 	const xChatKey = jwt.sign(
-		{ fid: parsedInteraction.authorId },
+		{ fid: parsedInteraction.author?.id },
 		process.env.BOTPRESS_CHAT_ENCRYPTION_KEY || ''
 	);
 
@@ -286,30 +288,35 @@ async function sendMessageToBotpress(
 }
 
 function parseDiscordInteraction(
-	interactionD: MessageFromDiscord
+	interactionRaw: MessageFromDiscord
 ): ParsedDiscordInteraction {
-	const interaction = JSON.parse(
-		JSON.stringify(interactionD)
-	) as MessageFromDiscord & {
-		authorId: string;
-		channel: {
-			parent: { name: string };
-			name: string;
-		};
-		url: string;
+	const clonedInteraction = interactionRaw as typeof interactionRaw & {
+		channel: { parent: { name: string } | null; name: string };
 	};
 
-	return {
-		content: interaction.cleanContent || '',
-		author: interaction.author?.toJSON() as DiscordUser,
-		authorId: interaction.authorId.toString(),
+	const authorData = clonedInteraction.author?.toJSON() as DiscordUser | null;
+
+	interface InteractionChannel {
+		parent: { name: string };
+		name: string;
+		id: string;
+	}
+
+	const channelData =
+		clonedInteraction.channel?.toJSON() as InteractionChannel;
+
+	const parsed = {
+		content: clonedInteraction.cleanContent || '',
+		author: authorData,
 		guildRoles:
-			interaction.member?.roles.cache
+			clonedInteraction.member?.roles.cache
 				.map((a) => `[${a.name}]`)
 				.join(' ') || '',
-		parentChannelName: interaction.channel.parent?.name || '',
-		channelName: interaction.channel.name,
-		channelId: interaction.channelId,
-		url: interaction.url,
+		parentChannelName: clonedInteraction.channel.parent?.name || '',
+		channelName: clonedInteraction.channel.name,
+		channelId: channelData.id,
+		url: clonedInteraction.url,
 	};
+
+	return parsed;
 }

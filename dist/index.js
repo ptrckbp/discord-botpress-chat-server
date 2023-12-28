@@ -1,3 +1,4 @@
+"use strict";
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -7,13 +8,17 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
-import jwt from 'jsonwebtoken';
-import { botpressChatClient } from './services/botpress';
-import { config } from 'dotenv';
-import { discordClient } from './services/discord';
-import { startHealthCheckBeacon } from './healthcheck';
-import { Events, } from 'discord.js';
-config();
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
+const botpress_1 = require("./services/botpress");
+const dotenv_1 = require("dotenv");
+const discord_1 = require("./services/discord");
+const healthcheck_1 = require("./healthcheck");
+const discord_js_1 = require("discord.js");
+(0, dotenv_1.config)();
 // set of conversations that are being listened to
 const listeningToConversationsSet = new Set([]);
 const interactionMap = new Map();
@@ -21,11 +26,11 @@ const interactionMap = new Map();
 function getOrCreateUser(xChatKey, authorFid) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            const existingUser = yield botpressChatClient.getUser({ xChatKey });
+            const existingUser = yield botpress_1.botpressChatClient.getUser({ xChatKey });
             return existingUser.user;
         }
         catch (error) {
-            const newlyCreatedUser = yield botpressChatClient.createUser({
+            const newlyCreatedUser = yield botpress_1.botpressChatClient.createUser({
                 // xChatKey,
                 fid: authorFid,
             });
@@ -54,20 +59,20 @@ function checkMessageRestrictions(message) {
     return true;
 }
 // checks if botpress is up and running
-discordClient.once(Events.ClientReady, startHealthCheckBeacon);
+discord_1.discordClient.once(discord_js_1.Events.ClientReady, healthcheck_1.startHealthCheckBeacon);
 // listen to new messages from discord
-discordClient.on(Events.MessageCreate, (interaction) => __awaiter(void 0, void 0, void 0, function* () {
+discord_1.discordClient.on(discord_js_1.Events.MessageCreate, (interaction) => __awaiter(void 0, void 0, void 0, function* () {
     console.log("There's a new user message!:", interaction.cleanContent);
     if (!checkMessageRestrictions(interaction)) {
         return;
     }
     const clonedInteraction = JSON.parse(JSON.stringify(interaction));
     const parsedInteraction = parseDiscordInteraction(clonedInteraction);
-    const xChatKey = jwt.sign({ fid: parsedInteraction.authorId }, process.env.BOTPRESS_CHAT_ENCRYPTION_KEY || '');
+    const xChatKey = jsonwebtoken_1.default.sign({ fid: parsedInteraction.authorId }, process.env.BOTPRESS_CHAT_ENCRYPTION_KEY || '');
     // 1. gets or creates a user in botpress
     const botpressUser = yield getOrCreateUser(xChatKey, parsedInteraction.authorId);
     // 2. creates a conversation
-    const { conversation } = yield botpressChatClient.getOrCreateConversation({
+    const { conversation } = yield botpress_1.botpressChatClient.getOrCreateConversation({
         xChatKey,
         fid: parsedInteraction.channelId,
     });
@@ -108,7 +113,7 @@ discordClient.on(Events.MessageCreate, (interaction) => __awaiter(void 0, void 0
         return;
     }
     // 4. listens to messages from botpress
-    const chatListener = yield botpressChatClient.listenConversation({
+    const chatListener = yield botpress_1.botpressChatClient.listenConversation({
         id: conversation.id,
         xChatKey,
     });
@@ -136,22 +141,22 @@ discordClient.on(Events.MessageCreate, (interaction) => __awaiter(void 0, void 0
     }));
 }));
 // send payload to botpress to ignore conversation when message is edited
-discordClient.on(Events.MessageUpdate, (oldMessage, newMessage) => __awaiter(void 0, void 0, void 0, function* () {
+discord_1.discordClient.on(discord_js_1.Events.MessageUpdate, (oldMessage, newMessage) => __awaiter(void 0, void 0, void 0, function* () {
     console.log('A message was updated!');
     if (!checkMessageRestrictions(newMessage)) {
         return;
     }
     const parsedInteraction = parseDiscordInteraction(oldMessage);
-    const xChatKey = jwt.sign({ fid: parsedInteraction.authorId }, process.env.BOTPRESS_CHAT_ENCRYPTION_KEY || '');
+    const xChatKey = jsonwebtoken_1.default.sign({ fid: parsedInteraction.authorId }, process.env.BOTPRESS_CHAT_ENCRYPTION_KEY || '');
     // 1. creates a conversation
-    const { conversation } = yield botpressChatClient.getOrCreateConversation({
+    const { conversation } = yield botpress_1.botpressChatClient.getOrCreateConversation({
         xChatKey,
         fid: parsedInteraction.channelId,
     });
     // REQ02
     // 2. sends the payload to ignore to botpress
     console.log('Sending message instructions to ignore conversation to Botpress...');
-    yield botpressChatClient.createMessage({
+    yield botpress_1.botpressChatClient.createMessage({
         xChatKey,
         conversationId: conversation.id,
         payload: {
@@ -174,7 +179,7 @@ discordClient.on(Events.MessageUpdate, (oldMessage, newMessage) => __awaiter(voi
 }));
 function sendMessageToBotpress(xChatKey, conversationId, conversationPayload, messagePayload, userPayload) {
     return __awaiter(this, void 0, void 0, function* () {
-        return yield botpressChatClient.createMessage({
+        return yield botpress_1.botpressChatClient.createMessage({
             xChatKey,
             conversationId,
             payload: {

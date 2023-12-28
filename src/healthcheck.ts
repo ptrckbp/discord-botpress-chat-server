@@ -1,9 +1,9 @@
-import express from 'express';
+import express, { Request, Response } from 'express';
 
 const startHealthCheckBeacon = () => {
 	const app = express();
 
-	app.get('/', function (req, res) {
+	app.get('/', function (req: Request, res: Response) {
 		res.send('Server is up!');
 		console.log('Healthcheck beacon pinged!');
 	});

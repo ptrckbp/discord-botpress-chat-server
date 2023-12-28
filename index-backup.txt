@@ -9,12 +9,7 @@ import { startHealthCheckBeacon } from './src/healthcheck.js';
 
 // const INTERACTION_TIMEOUT = 30 * 60 * 1000; // 30 minutes in milliseconds
 
-const myWebhookId = process.env.BOTPRESS_CHAT_WEBHOOK_ID;
-
 // create a botpress client
-const botpressClient = new BotpressClient({
-	apiUrl: `https://chat.botpress.cloud/${myWebhookId}`,
-});
 
 // create a discord client
 const client = new DiscordClient({
@@ -110,6 +105,7 @@ client.on(Events.MessageCreate, async (interaction) => {
 
 	const messagePayload = {};
 
+	// REQ03
 	// check if there is an attachment that's not a link preview
 	if (interaction.attachments.size > 0) {
 		console.log('Ignoring message with attachments');
@@ -241,6 +237,7 @@ client.on(Events.MessageUpdate, async (oldMessage, newMessage) => {
 		fid: channelId,
 	});
 
+	// REQ02
 	// 2. sends the payload to ignore to botpress
 	console.log(
 		'Sending message instructions to ignore conversation to Botpress...'

@@ -5,7 +5,7 @@ const startHealthCheckBeacon = () => {
 
 	app.get('/', function (req: Request, res: Response) {
 		res.send('Server is up!');
-		console.log('Healthcheck beacon pinged!');
+		console.log('Health check beacon pinged!');
 	});
 
 	app.listen(process.env.PORT || 3000);

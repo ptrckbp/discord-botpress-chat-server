@@ -11,6 +11,7 @@ import {
 	PartialMessage as PartialDiscordMessage,
 } from 'discord.js';
 
+
 config();
 
 interface ConversationPayload {
@@ -56,9 +57,9 @@ async function getOrCreateUser(
 		return existingUser.user;
 	} catch (error) {
 		const newlyCreatedUser = await botpressChatClient.createUser({
-			// xChatKey,
+			xChatKey,
 			fid: authorFid,
-		});
+		} as any);
 
 		if (!newlyCreatedUser) {
 			throw new Error('Error creating new user in Botpress');
@@ -119,13 +120,13 @@ discordClient.on(Events.MessageCreate, async (interaction) => {
 		const parsedInteraction: ParsedDiscordInteraction =
 			parseDiscordInteraction(interaction);
 
-		if (!parsedInteraction.author) {
+		if (!parsedInteraction.author || !parsedInteraction.author.id) {
 			console.log('Author data not found in interaction');
 			return;
 		}
 
 		const xChatKey = jwt.sign(
-			{ fid: parsedInteraction.author.id },
+			{ fid: parsedInteraction.author?.id },
 			process.env.BOTPRESS_CHAT_ENCRYPTION_KEY || ''
 		);
 
@@ -257,8 +258,13 @@ discordClient.on(Events.MessageUpdate, async (oldMessage, newMessage) => {
 		const parsedInteraction: ParsedDiscordInteraction =
 			parseDiscordInteraction(oldMessage);
 
+		if (!parsedInteraction.author || !parsedInteraction.author.id) {
+			console.log('Author data not found in interaction');
+			return;
+		}
+
 		const xChatKey = jwt.sign(
-			{ fid: parsedInteraction.author?.id },
+			{ fid: parsedInteraction.author.id },
 			process.env.BOTPRESS_CHAT_ENCRYPTION_KEY || ''
 		);
 
@@ -338,15 +344,6 @@ function parseDiscordInteraction(
 		const authorData =
 			clonedInteraction.author?.toJSON() as DiscordUser | null;
 
-		interface InteractionChannel {
-			parent: { name: string };
-			name: string;
-			id: string;
-		}
-
-		const channelData =
-			clonedInteraction.channel?.toJSON() as InteractionChannel;
-
 		const parsed = {
 			content: clonedInteraction.cleanContent || '',
 			author: authorData,
@@ -356,7 +353,7 @@ function parseDiscordInteraction(
 					.join(' ') || '',
 			parentChannelName: clonedInteraction.channel.parent?.name || '',
 			channelName: clonedInteraction.channel.name,
-			channelId: channelData.id,
+			channelId: clonedInteraction.channelId,
 			url: clonedInteraction.url,
 		};
 

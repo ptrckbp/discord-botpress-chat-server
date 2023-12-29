@@ -35,7 +35,7 @@ function getOrCreateUser(xChatKey, authorFid) {
         }
         catch (error) {
             const newlyCreatedUser = yield botpress_1.botpressChatClient.createUser({
-                // xChatKey,
+                xChatKey,
                 fid: authorFid,
             });
             if (!newlyCreatedUser) {
@@ -70,17 +70,18 @@ function checkMessageRestrictions(message) {
 discord_1.discordClient.once(discord_js_1.Events.ClientReady, healthcheck_1.startHealthCheckBeacon);
 // listen to new messages from discord
 discord_1.discordClient.on(discord_js_1.Events.MessageCreate, (interaction) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
     console.log("There's a new user message!:", interaction.cleanContent);
     try {
         if (!checkMessageRestrictions(interaction)) {
             return;
         }
         const parsedInteraction = parseDiscordInteraction(interaction);
-        if (!parsedInteraction.author) {
+        if (!parsedInteraction.author || !parsedInteraction.author.id) {
             console.log('Author data not found in interaction');
             return;
         }
-        const xChatKey = jsonwebtoken_1.default.sign({ fid: parsedInteraction.author.id }, process.env.BOTPRESS_CHAT_ENCRYPTION_KEY || '');
+        const xChatKey = jsonwebtoken_1.default.sign({ fid: (_a = parsedInteraction.author) === null || _a === void 0 ? void 0 : _a.id }, process.env.BOTPRESS_CHAT_ENCRYPTION_KEY || '');
         // 1. gets or creates a user in botpress
         const botpressUser = yield getOrCreateUser(xChatKey, parsedInteraction.author.id);
         // 2. creates a conversation
@@ -162,14 +163,17 @@ discord_1.discordClient.on(discord_js_1.Events.MessageCreate, (interaction) => _
 }));
 // send payload to botpress to ignore conversation when message is edited
 discord_1.discordClient.on(discord_js_1.Events.MessageUpdate, (oldMessage, newMessage) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a;
     console.log('A message was updated!');
     try {
         if (!checkMessageRestrictions(newMessage)) {
             return;
         }
         const parsedInteraction = parseDiscordInteraction(oldMessage);
-        const xChatKey = jsonwebtoken_1.default.sign({ fid: (_a = parsedInteraction.author) === null || _a === void 0 ? void 0 : _a.id }, process.env.BOTPRESS_CHAT_ENCRYPTION_KEY || '');
+        if (!parsedInteraction.author || !parsedInteraction.author.id) {
+            console.log('Author data not found in interaction');
+            return;
+        }
+        const xChatKey = jsonwebtoken_1.default.sign({ fid: parsedInteraction.author.id }, process.env.BOTPRESS_CHAT_ENCRYPTION_KEY || '');
         // 1. creates a conversation
         const { conversation } = yield botpress_1.botpressChatClient.getOrCreateConversation({
             xChatKey,
@@ -217,18 +221,17 @@ function sendMessageToBotpress(xChatKey, conversationId, conversationPayload, me
     });
 }
 function parseDiscordInteraction(interactionRaw) {
-    var _a, _b, _c, _d;
+    var _a, _b, _c;
     try {
         const clonedInteraction = interactionRaw;
         const authorData = (_a = clonedInteraction.author) === null || _a === void 0 ? void 0 : _a.toJSON();
-        const channelData = (_b = clonedInteraction.channel) === null || _b === void 0 ? void 0 : _b.toJSON();
         const parsed = {
             content: clonedInteraction.cleanContent || '',
             author: authorData,
-            guildRoles: ((_c = clonedInteraction.member) === null || _c === void 0 ? void 0 : _c.roles.cache.map((a) => `[${a.name}]`).join(' ')) || '',
-            parentChannelName: ((_d = clonedInteraction.channel.parent) === null || _d === void 0 ? void 0 : _d.name) || '',
+            guildRoles: ((_b = clonedInteraction.member) === null || _b === void 0 ? void 0 : _b.roles.cache.map((a) => `[${a.name}]`).join(' ')) || '',
+            parentChannelName: ((_c = clonedInteraction.channel.parent) === null || _c === void 0 ? void 0 : _c.name) || '',
             channelName: clonedInteraction.channel.name,
-            channelId: channelData.id,
+            channelId: clonedInteraction.channelId,
             url: clonedInteraction.url,
         };
         return parsed;

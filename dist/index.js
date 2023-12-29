@@ -39,7 +39,7 @@ function getOrCreateUser(xChatKey, authorFid) {
     });
 }
 function checkMessageRestrictions(message) {
-    var _a;
+    var _a, _b;
     if (message.guildId != process.env.DISCORD_SERVER_ID) {
         console.log('Ignoring message from other server');
         return false;
@@ -52,7 +52,7 @@ function checkMessageRestrictions(message) {
         console.log('Ignoring message from bot');
         return false;
     }
-    if (message.channel.type !== 11) {
+    if (((_b = message.channel) === null || _b === void 0 ? void 0 : _b.type) !== 11) {
         console.log('Ignoring message from non-thread channel');
         return false;
     }
@@ -63,147 +63,164 @@ discord_1.discordClient.once(discord_js_1.Events.ClientReady, healthcheck_1.star
 // listen to new messages from discord
 discord_1.discordClient.on(discord_js_1.Events.MessageCreate, (interaction) => __awaiter(void 0, void 0, void 0, function* () {
     console.log("There's a new user message!:", interaction.cleanContent);
-    if (!checkMessageRestrictions(interaction)) {
-        return;
-    }
-    const clonedInteraction = JSON.parse(JSON.stringify(interaction));
-    const parsedInteraction = parseDiscordInteraction(clonedInteraction);
-    const xChatKey = jsonwebtoken_1.default.sign({ fid: parsedInteraction.authorId }, process.env.BOTPRESS_CHAT_ENCRYPTION_KEY || '');
-    // 1. gets or creates a user in botpress
-    const botpressUser = yield getOrCreateUser(xChatKey, parsedInteraction.authorId);
-    // 2. creates a conversation
-    const { conversation } = yield botpress_1.botpressChatClient.getOrCreateConversation({
-        xChatKey,
-        fid: parsedInteraction.channelId,
-    });
-    const messagePayload = {};
-    // REQ03
-    // check if there is an attachment that's not a link preview
-    if (interaction.attachments.size > 0) {
-        console.log('Ignoring message with attachments');
-        messagePayload.action = 'ignore_conversation';
-    }
-    else {
-        messagePayload.content = parsedInteraction.content;
-    }
-    // 3. sends the message to botpress
-    console.log('Sending message to Botpress...');
-    const conversationPayload = {
-        type: 'thread',
-        parentName: parsedInteraction.parentChannelName,
-        threadName: parsedInteraction.channelName,
-        threadId: parsedInteraction.channelId, // added
-        url: parsedInteraction.url,
-    };
-    const userPayload = {
-        guildRoles: parsedInteraction.guildRoles,
-        nickname: parsedInteraction.author.username,
-        name: parsedInteraction.author.globalName,
-        authorId: parsedInteraction.author.id, // added
-    };
-    yield sendMessageToBotpress(xChatKey, conversation.id, conversationPayload, messagePayload, userPayload);
-    if (!listeningToConversationsSet.has(conversation.id)) {
-        console.log(`Listening to new conversation (${conversation.id})...`);
-        listeningToConversationsSet.add(conversation.id);
-        interactionMap.set(conversation.id, interaction);
-        // could add a timeout here
-    }
-    else {
-        console.log(`Already listening to this conversation (${conversation.id})...`);
-        return;
-    }
-    // 4. listens to messages from botpress
-    const chatListener = yield botpress_1.botpressChatClient.listenConversation({
-        id: conversation.id,
-        xChatKey,
-    });
-    // 5. sends messages from botpress to discord
-    chatListener.on('message_created', (event) => __awaiter(void 0, void 0, void 0, function* () {
-        console.log('Received message from Botpress...');
-        console.log('event', event);
-        const typedEvent = event;
-        const conversationInteraction = interactionMap.get(conversation.id);
-        if (!conversationInteraction) {
-            console.log('Interaction not found or has expired...');
+    try {
+        if (!checkMessageRestrictions(interaction)) {
             return;
         }
-        if (typedEvent.userId === botpressUser.id) {
-            console.log('Ignoring message just sent by the current user...');
+        const parsedInteraction = parseDiscordInteraction(interaction);
+        if (!parsedInteraction.author) {
+            console.log('Author data not found in interaction');
             return;
         }
-        if (typedEvent.payload.text ||
-            typeof typedEvent.payload.text === 'string') {
-            conversationInteraction.reply(typedEvent.payload.text.slice(0, 2000));
+        const xChatKey = jsonwebtoken_1.default.sign({ fid: parsedInteraction.author.id }, process.env.BOTPRESS_CHAT_ENCRYPTION_KEY || '');
+        // 1. gets or creates a user in botpress
+        const botpressUser = yield getOrCreateUser(xChatKey, parsedInteraction.author.id);
+        // 2. creates a conversation
+        const { conversation } = yield botpress_1.botpressChatClient.getOrCreateConversation({
+            xChatKey,
+            fid: parsedInteraction.channelId,
+        });
+        const messagePayload = {};
+        // REQ03
+        // check if there is an attachment that's not a link preview
+        if (interaction.attachments.size > 0) {
+            console.log('Ignoring message with attachments');
+            messagePayload.action = 'ignore_conversation';
         }
         else {
-            console.log("Can't send message to discord, payload is empty or not a string...");
+            messagePayload.content = parsedInteraction.content;
         }
-    }));
+        // 3. sends the message to botpress
+        console.log('Sending message to Botpress...');
+        const conversationPayload = {
+            type: 'thread',
+            parentName: parsedInteraction.parentChannelName,
+            threadName: parsedInteraction.channelName,
+            threadId: parsedInteraction.channelId, // added
+            url: parsedInteraction.url,
+        };
+        const userPayload = {
+            guildRoles: parsedInteraction.guildRoles,
+            nickname: parsedInteraction.author.username,
+            name: parsedInteraction.author.globalName,
+            authorId: parsedInteraction.author.id, // added
+        };
+        yield sendMessageToBotpress(xChatKey, conversation.id, conversationPayload, messagePayload, userPayload);
+        if (!listeningToConversationsSet.has(conversation.id)) {
+            console.log(`Listening to new conversation (${conversation.id})...`);
+            listeningToConversationsSet.add(conversation.id);
+            interactionMap.set(conversation.id, interaction);
+            // could add a timeout here
+        }
+        else {
+            console.log(`Already listening to this conversation (${conversation.id})...`);
+            return;
+        }
+        // 4. listens to messages from botpress
+        const chatListener = yield botpress_1.botpressChatClient.listenConversation({
+            id: conversation.id,
+            xChatKey,
+        });
+        // 5. sends messages from botpress to discord
+        chatListener.on('message_created', (event) => __awaiter(void 0, void 0, void 0, function* () {
+            console.log('Received message from Botpress...');
+            try {
+                const typedEvent = event;
+                const conversationInteraction = interactionMap.get(conversation.id);
+                if (!conversationInteraction) {
+                    console.log('Interaction not found or has expired...');
+                    return;
+                }
+                if (typedEvent.userId === botpressUser.id) {
+                    console.log('Ignoring message just sent by the current user...');
+                    return;
+                }
+                if (typedEvent.payload.text ||
+                    typeof typedEvent.payload.text === 'string') {
+                    conversationInteraction.reply(typedEvent.payload.text.slice(0, 2000));
+                }
+                else {
+                    console.log("Can't send message to discord, payload is empty or not a string...");
+                }
+            }
+            catch (error) {
+                console.log('Error sending message to discord:', error);
+            }
+        }));
+    }
+    catch (error) {
+        console.log('Error when processing message created:', error);
+    }
 }));
 // send payload to botpress to ignore conversation when message is edited
 discord_1.discordClient.on(discord_js_1.Events.MessageUpdate, (oldMessage, newMessage) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
     console.log('A message was updated!');
-    if (!checkMessageRestrictions(newMessage)) {
-        return;
+    try {
+        if (!checkMessageRestrictions(newMessage)) {
+            return;
+        }
+        const parsedInteraction = parseDiscordInteraction(oldMessage);
+        const xChatKey = jsonwebtoken_1.default.sign({ fid: (_a = parsedInteraction.author) === null || _a === void 0 ? void 0 : _a.id }, process.env.BOTPRESS_CHAT_ENCRYPTION_KEY || '');
+        // 1. creates a conversation
+        const { conversation } = yield botpress_1.botpressChatClient.getOrCreateConversation({
+            xChatKey,
+            fid: parsedInteraction.channelId,
+        });
+        const conversationPayload = {
+            type: 'thread',
+            threadId: parsedInteraction.channelId, // added
+        };
+        const messagePayload = {
+            action: 'ignore_conversation',
+        };
+        // REQ02
+        // 2. sends the payload to ignore to botpress
+        console.log('Sending message instructions to ignore conversation to Botpress...');
+        yield sendMessageToBotpress(xChatKey, conversation.id, conversationPayload, messagePayload);
+        // 4. removes the conversation from the listeners
+        listeningToConversationsSet.delete(conversation.id);
+        interactionMap.delete(conversation.id);
+        console.log(`Interaction for conversation ${conversation.id} has been removed due to message edit.`);
     }
-    const parsedInteraction = parseDiscordInteraction(oldMessage);
-    const xChatKey = jsonwebtoken_1.default.sign({ fid: parsedInteraction.authorId }, process.env.BOTPRESS_CHAT_ENCRYPTION_KEY || '');
-    // 1. creates a conversation
-    const { conversation } = yield botpress_1.botpressChatClient.getOrCreateConversation({
-        xChatKey,
-        fid: parsedInteraction.channelId,
-    });
-    // REQ02
-    // 2. sends the payload to ignore to botpress
-    console.log('Sending message instructions to ignore conversation to Botpress...');
-    yield botpress_1.botpressChatClient.createMessage({
-        xChatKey,
-        conversationId: conversation.id,
-        payload: {
-            type: 'custom',
-            payload: {
-                conversation: {
-                    type: 'thread',
-                    threadId: parsedInteraction.channelId, // added
-                },
-                message: {
-                    action: 'ignore_conversation',
-                },
-            },
-        },
-    });
-    // 4. removes the conversation from the listeners
-    listeningToConversationsSet.delete(conversation.id);
-    interactionMap.delete(conversation.id);
-    console.log(`Interaction for conversation ${conversation.id} has been removed due to message edit.`);
+    catch (error) {
+        console.log('Error when processing message updated:', error);
+    }
 }));
 function sendMessageToBotpress(xChatKey, conversationId, conversationPayload, messagePayload, userPayload) {
     return __awaiter(this, void 0, void 0, function* () {
-        return yield botpress_1.botpressChatClient.createMessage({
-            xChatKey,
-            conversationId,
-            payload: {
-                type: 'custom',
+        try {
+            yield botpress_1.botpressChatClient.createMessage({
+                xChatKey,
+                conversationId,
                 payload: {
-                    conversation: conversationPayload,
-                    message: messagePayload,
-                    user: userPayload,
+                    type: 'custom',
+                    payload: {
+                        conversation: conversationPayload,
+                        message: messagePayload,
+                        user: userPayload,
+                    },
                 },
-            },
-        });
+            });
+        }
+        catch (error) {
+            console.error('Error sending message to Botpress:', error);
+        }
     });
 }
-function parseDiscordInteraction(interactionD) {
-    var _a, _b, _c;
-    const interaction = JSON.parse(JSON.stringify(interactionD));
-    return {
-        content: interaction.cleanContent || '',
-        author: (_a = interaction.author) === null || _a === void 0 ? void 0 : _a.toJSON(),
-        authorId: interaction.authorId.toString(),
-        guildRoles: ((_b = interaction.member) === null || _b === void 0 ? void 0 : _b.roles.cache.map((a) => `[${a.name}]`).join(' ')) || '',
-        parentChannelName: ((_c = interaction.channel.parent) === null || _c === void 0 ? void 0 : _c.name) || '',
-        channelName: interaction.channel.name,
-        channelId: interaction.channelId,
-        url: interaction.url,
+function parseDiscordInteraction(interactionRaw) {
+    var _a, _b, _c, _d;
+    const clonedInteraction = interactionRaw;
+    const authorData = (_a = clonedInteraction.author) === null || _a === void 0 ? void 0 : _a.toJSON();
+    const channelData = (_b = clonedInteraction.channel) === null || _b === void 0 ? void 0 : _b.toJSON();
+    const parsed = {
+        content: clonedInteraction.cleanContent || '',
+        author: authorData,
+        guildRoles: ((_c = clonedInteraction.member) === null || _c === void 0 ? void 0 : _c.roles.cache.map((a) => `[${a.name}]`).join(' ')) || '',
+        parentChannelName: ((_d = clonedInteraction.channel.parent) === null || _d === void 0 ? void 0 : _d.name) || '',
+        channelName: clonedInteraction.channel.name,
+        channelId: channelData.id,
+        url: clonedInteraction.url,
     };
+    return parsed;
 }

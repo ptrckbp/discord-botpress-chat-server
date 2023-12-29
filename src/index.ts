@@ -3,6 +3,7 @@ import { botpressChatClient } from './services/botpress';
 import { config } from 'dotenv';
 import { discordClient } from './services/discord';
 import { startHealthCheckBeacon } from './healthcheck';
+import { User as BotpressUser } from '@botpress/chat';
 import {
 	Message as DiscordMessage,
 	User as DiscordUser,
@@ -39,7 +40,10 @@ const listeningToConversationsSet = new Set<string>([]);
 const interactionMap = new Map<string, MessageFromDiscord>();
 
 // gets or creates a user in botpress
-async function getOrCreateUser(xChatKey: string, authorFid: string) {
+async function getOrCreateUser(
+	xChatKey: string,
+	authorFid: string
+): Promise<BotpressUser> {
 	try {
 		const existingUser = await botpressChatClient.getUser({ xChatKey });
 		return existingUser.user;
@@ -68,7 +72,7 @@ function checkMessageRestrictions(message: MessageFromDiscord): boolean {
 		return false;
 	}
 
-	if (message.channel.type !== 11) {
+	if (message.channel?.type !== 11) {
 		console.log('Ignoring message from non-thread channel');
 		return false;
 	}
@@ -93,198 +97,221 @@ interface ParsedDiscordInteraction {
 discordClient.on(Events.MessageCreate, async (interaction) => {
 	console.log("There's a new user message!:", interaction.cleanContent);
 
-	if (!checkMessageRestrictions(interaction)) {
-		return;
-	}
+	try {
+		if (!checkMessageRestrictions(interaction)) {
+			return;
+		}
 
-	const parsedInteraction: ParsedDiscordInteraction =
-		parseDiscordInteraction(interaction);
+		const parsedInteraction: ParsedDiscordInteraction =
+			parseDiscordInteraction(interaction);
 
-	if (!parsedInteraction.author) {
-		console.log('Author data not found in interaction');
-		return;
-	}
+		if (!parsedInteraction.author) {
+			console.log('Author data not found in interaction');
+			return;
+		}
 
-	const xChatKey = jwt.sign(
-		{ fid: parsedInteraction.author.id },
-		process.env.BOTPRESS_CHAT_ENCRYPTION_KEY || ''
-	);
-
-	// 1. gets or creates a user in botpress
-	const botpressUser = await getOrCreateUser(
-		xChatKey,
-		parsedInteraction.author.id
-	);
-
-	// 2. creates a conversation
-	const { conversation } = await botpressChatClient.getOrCreateConversation({
-		xChatKey,
-		fid: parsedInteraction.channelId,
-	});
-
-	const messagePayload: MessagePayload = {};
-
-	// REQ03
-	// check if there is an attachment that's not a link preview
-	if (interaction.attachments.size > 0) {
-		console.log('Ignoring message with attachments');
-		messagePayload.action = 'ignore_conversation';
-	} else {
-		messagePayload.content = parsedInteraction.content;
-	}
-
-	// 3. sends the message to botpress
-	console.log('Sending message to Botpress...');
-
-	const conversationPayload: ConversationPayload = {
-		type: 'thread',
-		parentName: parsedInteraction.parentChannelName,
-		threadName: parsedInteraction.channelName,
-		threadId: parsedInteraction.channelId, // added
-		url: parsedInteraction.url,
-	};
-
-	const userPayload: UserPayload = {
-		guildRoles: parsedInteraction.guildRoles,
-		nickname: parsedInteraction.author.username,
-		name: parsedInteraction.author.globalName,
-		authorId: parsedInteraction.author.id, // added
-	};
-
-	await sendMessageToBotpress(
-		xChatKey,
-		conversation.id,
-		conversationPayload,
-		messagePayload,
-		userPayload
-	);
-
-	if (!listeningToConversationsSet.has(conversation.id)) {
-		console.log(`Listening to new conversation (${conversation.id})...`);
-		listeningToConversationsSet.add(conversation.id);
-		interactionMap.set(conversation.id, interaction);
-
-		// could add a timeout here
-	} else {
-		console.log(
-			`Already listening to this conversation (${conversation.id})...`
+		const xChatKey = jwt.sign(
+			{ fid: parsedInteraction.author.id },
+			process.env.BOTPRESS_CHAT_ENCRYPTION_KEY || ''
 		);
-		return;
-	}
 
-	// 4. listens to messages from botpress
-	const chatListener = await botpressChatClient.listenConversation({
-		id: conversation.id,
-		xChatKey,
-	});
+		// 1. gets or creates a user in botpress
+		const botpressUser = await getOrCreateUser(
+			xChatKey,
+			parsedInteraction.author.id
+		);
 
-	// 5. sends messages from botpress to discord
-	chatListener.on('message_created', async (event) => {
-		console.log('Received message from Botpress...');
-		console.log('event', event);
+		// 2. creates a conversation
+		const { conversation } =
+			await botpressChatClient.getOrCreateConversation({
+				xChatKey,
+				fid: parsedInteraction.channelId,
+			});
 
-		const typedEvent = event as typeof event & {
-			payload: { text: string };
+		const messagePayload: MessagePayload = {};
+
+		// REQ03
+		// check if there is an attachment that's not a link preview
+		if (interaction.attachments.size > 0) {
+			console.log('Ignoring message with attachments');
+			messagePayload.action = 'ignore_conversation';
+		} else {
+			messagePayload.content = parsedInteraction.content;
+		}
+
+		// 3. sends the message to botpress
+		console.log('Sending message to Botpress...');
+
+		const conversationPayload: ConversationPayload = {
+			type: 'thread',
+			parentName: parsedInteraction.parentChannelName,
+			threadName: parsedInteraction.channelName,
+			threadId: parsedInteraction.channelId, // added
+			url: parsedInteraction.url,
 		};
 
-		const conversationInteraction = interactionMap.get(conversation.id);
+		const userPayload: UserPayload = {
+			guildRoles: parsedInteraction.guildRoles,
+			nickname: parsedInteraction.author.username,
+			name: parsedInteraction.author.globalName,
+			authorId: parsedInteraction.author.id, // added
+		};
 
-		if (!conversationInteraction) {
-			console.log('Interaction not found or has expired...');
-			return;
-		}
+		await sendMessageToBotpress(
+			xChatKey,
+			conversation.id,
+			conversationPayload,
+			messagePayload,
+			userPayload
+		);
 
-		if (typedEvent.userId === botpressUser.id) {
-			console.log('Ignoring message just sent by the current user...');
-			return;
-		}
-
-		if (
-			typedEvent.payload.text ||
-			typeof typedEvent.payload.text === 'string'
-		) {
-			conversationInteraction.reply(
-				typedEvent.payload.text.slice(0, 2000)
+		if (!listeningToConversationsSet.has(conversation.id)) {
+			console.log(
+				`Listening to new conversation (${conversation.id})...`
 			);
+			listeningToConversationsSet.add(conversation.id);
+			interactionMap.set(conversation.id, interaction);
+
+			// could add a timeout here
 		} else {
 			console.log(
-				"Can't send message to discord, payload is empty or not a string..."
+				`Already listening to this conversation (${conversation.id})...`
 			);
+			return;
 		}
-	});
+
+		// 4. listens to messages from botpress
+		const chatListener = await botpressChatClient.listenConversation({
+			id: conversation.id,
+			xChatKey,
+		});
+
+		// 5. sends messages from botpress to discord
+		chatListener.on('message_created', async (event) => {
+			console.log('Received message from Botpress...');
+
+			try {
+				const typedEvent = event as typeof event & {
+					payload: { text: string };
+				};
+
+				const conversationInteraction = interactionMap.get(
+					conversation.id
+				);
+
+				if (!conversationInteraction) {
+					console.log('Interaction not found or has expired...');
+					return;
+				}
+
+				if (typedEvent.userId === botpressUser.id) {
+					console.log(
+						'Ignoring message just sent by the current user...'
+					);
+					return;
+				}
+
+				if (
+					typedEvent.payload.text ||
+					typeof typedEvent.payload.text === 'string'
+				) {
+					conversationInteraction.reply(
+						typedEvent.payload.text.slice(0, 2000)
+					);
+				} else {
+					console.log(
+						"Can't send message to discord, payload is empty or not a string..."
+					);
+				}
+			} catch (error) {
+				console.log('Error sending message to discord:', error);
+			}
+		});
+	} catch (error) {
+		console.log('Error when processing message created:', error);
+	}
 });
 
 // send payload to botpress to ignore conversation when message is edited
 discordClient.on(Events.MessageUpdate, async (oldMessage, newMessage) => {
 	console.log('A message was updated!');
 
-	if (!checkMessageRestrictions(newMessage)) {
-		return;
+	try {
+		if (!checkMessageRestrictions(newMessage)) {
+			return;
+		}
+
+		const parsedInteraction: ParsedDiscordInteraction =
+			parseDiscordInteraction(oldMessage);
+
+		const xChatKey = jwt.sign(
+			{ fid: parsedInteraction.author?.id },
+			process.env.BOTPRESS_CHAT_ENCRYPTION_KEY || ''
+		);
+
+		// 1. creates a conversation
+		const { conversation } =
+			await botpressChatClient.getOrCreateConversation({
+				xChatKey,
+				fid: parsedInteraction.channelId,
+			});
+
+		const conversationPayload: Partial<ConversationPayload> = {
+			type: 'thread',
+			threadId: parsedInteraction.channelId, // added
+		};
+
+		const messagePayload: MessagePayload = {
+			action: 'ignore_conversation',
+		};
+
+		// REQ02
+		// 2. sends the payload to ignore to botpress
+		console.log(
+			'Sending message instructions to ignore conversation to Botpress...'
+		);
+
+		await sendMessageToBotpress(
+			xChatKey,
+			conversation.id,
+			conversationPayload,
+			messagePayload
+		);
+
+		// 4. removes the conversation from the listeners
+		listeningToConversationsSet.delete(conversation.id);
+		interactionMap.delete(conversation.id);
+		console.log(
+			`Interaction for conversation ${conversation.id} has been removed due to message edit.`
+		);
+	} catch (error: any) {
+		console.log('Error when processing message updated:', error);
 	}
-
-	const parsedInteraction: ParsedDiscordInteraction =
-		parseDiscordInteraction(oldMessage);
-
-	const xChatKey = jwt.sign(
-		{ fid: parsedInteraction.author?.id },
-		process.env.BOTPRESS_CHAT_ENCRYPTION_KEY || ''
-	);
-
-	// 1. creates a conversation
-	const { conversation } = await botpressChatClient.getOrCreateConversation({
-		xChatKey,
-		fid: parsedInteraction.channelId,
-	});
-
-	// REQ02
-	// 2. sends the payload to ignore to botpress
-	console.log(
-		'Sending message instructions to ignore conversation to Botpress...'
-	);
-	await botpressChatClient.createMessage({
-		xChatKey,
-		conversationId: conversation.id,
-		payload: {
-			type: 'custom',
-			payload: {
-				conversation: {
-					type: 'thread',
-					threadId: parsedInteraction.channelId, // added
-				} as ConversationPayload,
-				message: {
-					action: 'ignore_conversation',
-				},
-			},
-		},
-	});
-
-	// 4. removes the conversation from the listeners
-	listeningToConversationsSet.delete(conversation.id);
-	interactionMap.delete(conversation.id);
-	console.log(
-		`Interaction for conversation ${conversation.id} has been removed due to message edit.`
-	);
 });
 
 async function sendMessageToBotpress(
 	xChatKey: string,
 	conversationId: string,
-	conversationPayload: ConversationPayload,
+	conversationPayload: ConversationPayload | Partial<ConversationPayload>,
 	messagePayload: MessagePayload,
-	userPayload: UserPayload
-) {
-	return await botpressChatClient.createMessage({
-		xChatKey,
-		conversationId,
-		payload: {
-			type: 'custom',
+	userPayload?: UserPayload
+): Promise<void> {
+	try {
+		await botpressChatClient.createMessage({
+			xChatKey,
+			conversationId,
 			payload: {
-				conversation: conversationPayload,
-				message: messagePayload,
-				user: userPayload,
+				type: 'custom',
+				payload: {
+					conversation: conversationPayload,
+					message: messagePayload,
+					user: userPayload,
+				},
 			},
-		},
-	});
+		});
+	} catch (error) {
+		console.error('Error sending message to Botpress:', error);
+	}
 }
 
 function parseDiscordInteraction(

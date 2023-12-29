@@ -14,4 +14,4 @@ const discordClient = new discord_js_1.Client({
 });
 exports.discordClient = discordClient;
 // login to discord with your bot token
-discordClient.login(process.env.DISCORD_BOT_TOKEN);
+discordClient.login(process.env.DISCORD_APP_BOT_TOKEN);

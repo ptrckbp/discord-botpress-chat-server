@@ -1,6 +1,7 @@
 import { Client as DiscordClient, GatewayIntentBits } from 'discord.js';
 import { config } from 'dotenv';
 
+
 config();
 
 const discordClient = new DiscordClient({
@@ -13,6 +14,6 @@ const discordClient = new DiscordClient({
 });
 
 // login to discord with your bot token
-discordClient.login(process.env.DISCORD_BOT_TOKEN);
+discordClient.login(process.env.DISCORD_APP_BOT_TOKEN);
 
 export { discordClient };

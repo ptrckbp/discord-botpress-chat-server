@@ -4,7 +4,7 @@ This project allows you to connect your Botpress bot with your Discord server us
 
 ## Requirements
 
--   A published Botpress bot with the "Chat" integration enabled
+-   A published Botpress bot with the **Chat** integration enabled
 -   A developer Discord app
 -   Admin rights in a Discord server
 -   An account on a cloud platform like Heroku or Digital Ocean (for optionally deploying the project)
@@ -13,12 +13,12 @@ This project allows you to connect your Botpress bot with your Discord server us
 
 In order to run this project locally you need to set up a few variables. Rename the `.env.sample` file to `.env` and add the actual values:
 
--   APP_ID - The application ID is available in the **General Information** section of your app settings
--   APP_PUBLIC_KEY - The public key is available in the **General Information** section of your app settings
--   DISCORD_BOT_TOKEN - The bot token is available in the **Bot** section of your app. Reset the token to be able to see and copy it
+-   DISCORD_APP_ID - The application ID is available in the **General Information** section of your app settings
+-   DISCORD_APP_PUBLIC_KEY - The public key is available in the **General Information** section of your app settings
+-   DISCORD_APP_BOT_TOKEN - The bot token is available in the **Bot** section of your app. Reset the token to be able to see and copy it
+-   DISCORD_SERVER_ID - The server ID available in the **Widget** section of your server settings
 -   BOTPRESS_CHAT_WEBHOOK_ID - The webhook ID is the code after `https://webhook.botpress.cloud/` in the settings of the **Chat** integration in Botpress.
 -   BOTPRESS_CHAT_ENCRYPTION_KEY - This is a random text that you can create yourself or generate somewhere (like in [Random.org](https://www.random.org/)). Save the text in the "Encryption Key" input of the **Chat** integration settings.
--   DISCORD_SERVER_ID - The server ID available in the **Widget** section of your server settings
 
 Learn more about setting up a Discord in the [Get Started guide](https://discord.com/developers/docs/getting-started)
 

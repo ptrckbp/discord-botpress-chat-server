@@ -22,7 +22,7 @@ const client = new DiscordClient({
 });
 
 // login to discord with your bot token
-client.login(process.env.DISCORD_BOT_TOKEN);
+client.login(process.env.DISCORD_APP_BOT_TOKEN);
 
 // set of conversations that are being listened to
 const listeningToConversationsSet = new Set([]);

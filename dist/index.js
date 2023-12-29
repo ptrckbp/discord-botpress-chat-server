@@ -27,6 +27,10 @@ function getOrCreateUser(xChatKey, authorFid) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
             const existingUser = yield botpress_1.botpressChatClient.getUser({ xChatKey });
+            if (!existingUser) {
+                throw new Error('User not found in Botpress');
+            }
+            console.log("Found the existing user's data in Botpress");
             return existingUser.user;
         }
         catch (error) {
@@ -34,6 +38,10 @@ function getOrCreateUser(xChatKey, authorFid) {
                 // xChatKey,
                 fid: authorFid,
             });
+            if (!newlyCreatedUser) {
+                throw new Error('Error creating new user in Botpress');
+            }
+            console.log('Created a new user in Botpress');
             return newlyCreatedUser.user;
         }
     });
@@ -90,8 +98,6 @@ discord_1.discordClient.on(discord_js_1.Events.MessageCreate, (interaction) => _
         else {
             messagePayload.content = parsedInteraction.content;
         }
-        // 3. sends the message to botpress
-        console.log('Sending message to Botpress...');
         const conversationPayload = {
             type: 'thread',
             parentName: parsedInteraction.parentChannelName,
@@ -105,6 +111,8 @@ discord_1.discordClient.on(discord_js_1.Events.MessageCreate, (interaction) => _
             name: parsedInteraction.author.globalName,
             authorId: parsedInteraction.author.id, // added
         };
+        // 3. sends the message to botpress
+        console.log('Sending message to Botpress...');
         yield sendMessageToBotpress(xChatKey, conversation.id, conversationPayload, messagePayload, userPayload);
         if (!listeningToConversationsSet.has(conversation.id)) {
             console.log(`Listening to new conversation (${conversation.id})...`);
@@ -210,17 +218,23 @@ function sendMessageToBotpress(xChatKey, conversationId, conversationPayload, me
 }
 function parseDiscordInteraction(interactionRaw) {
     var _a, _b, _c, _d;
-    const clonedInteraction = interactionRaw;
-    const authorData = (_a = clonedInteraction.author) === null || _a === void 0 ? void 0 : _a.toJSON();
-    const channelData = (_b = clonedInteraction.channel) === null || _b === void 0 ? void 0 : _b.toJSON();
-    const parsed = {
-        content: clonedInteraction.cleanContent || '',
-        author: authorData,
-        guildRoles: ((_c = clonedInteraction.member) === null || _c === void 0 ? void 0 : _c.roles.cache.map((a) => `[${a.name}]`).join(' ')) || '',
-        parentChannelName: ((_d = clonedInteraction.channel.parent) === null || _d === void 0 ? void 0 : _d.name) || '',
-        channelName: clonedInteraction.channel.name,
-        channelId: channelData.id,
-        url: clonedInteraction.url,
-    };
-    return parsed;
+    try {
+        const clonedInteraction = interactionRaw;
+        const authorData = (_a = clonedInteraction.author) === null || _a === void 0 ? void 0 : _a.toJSON();
+        const channelData = (_b = clonedInteraction.channel) === null || _b === void 0 ? void 0 : _b.toJSON();
+        const parsed = {
+            content: clonedInteraction.cleanContent || '',
+            author: authorData,
+            guildRoles: ((_c = clonedInteraction.member) === null || _c === void 0 ? void 0 : _c.roles.cache.map((a) => `[${a.name}]`).join(' ')) || '',
+            parentChannelName: ((_d = clonedInteraction.channel.parent) === null || _d === void 0 ? void 0 : _d.name) || '',
+            channelName: clonedInteraction.channel.name,
+            channelId: channelData.id,
+            url: clonedInteraction.url,
+        };
+        return parsed;
+    }
+    catch (error) {
+        console.log('Error parsing interaction:', error);
+        throw error;
+    }
 }

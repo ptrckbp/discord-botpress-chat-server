@@ -46,12 +46,26 @@ async function getOrCreateUser(
 ): Promise<BotpressUser> {
 	try {
 		const existingUser = await botpressChatClient.getUser({ xChatKey });
+
+		if (!existingUser) {
+			throw new Error('User not found in Botpress');
+		}
+
+		console.log("Found the existing user's data in Botpress");
+
 		return existingUser.user;
 	} catch (error) {
 		const newlyCreatedUser = await botpressChatClient.createUser({
 			// xChatKey,
 			fid: authorFid,
 		});
+
+		if (!newlyCreatedUser) {
+			throw new Error('Error creating new user in Botpress');
+		}
+
+		console.log('Created a new user in Botpress');
+
 		return newlyCreatedUser.user;
 	}
 }
@@ -139,9 +153,6 @@ discordClient.on(Events.MessageCreate, async (interaction) => {
 			messagePayload.content = parsedInteraction.content;
 		}
 
-		// 3. sends the message to botpress
-		console.log('Sending message to Botpress...');
-
 		const conversationPayload: ConversationPayload = {
 			type: 'thread',
 			parentName: parsedInteraction.parentChannelName,
@@ -157,6 +168,8 @@ discordClient.on(Events.MessageCreate, async (interaction) => {
 			authorId: parsedInteraction.author.id, // added
 		};
 
+		// 3. sends the message to botpress
+		console.log('Sending message to Botpress...');
 		await sendMessageToBotpress(
 			xChatKey,
 			conversation.id,
@@ -317,33 +330,40 @@ async function sendMessageToBotpress(
 function parseDiscordInteraction(
 	interactionRaw: MessageFromDiscord
 ): ParsedDiscordInteraction {
-	const clonedInteraction = interactionRaw as typeof interactionRaw & {
-		channel: { parent: { name: string } | null; name: string };
-	};
+	try {
+		const clonedInteraction = interactionRaw as typeof interactionRaw & {
+			channel: { parent: { name: string } | null; name: string };
+		};
 
-	const authorData = clonedInteraction.author?.toJSON() as DiscordUser | null;
+		const authorData =
+			clonedInteraction.author?.toJSON() as DiscordUser | null;
 
-	interface InteractionChannel {
-		parent: { name: string };
-		name: string;
-		id: string;
+		interface InteractionChannel {
+			parent: { name: string };
+			name: string;
+			id: string;
+		}
+
+		const channelData =
+			clonedInteraction.channel?.toJSON() as InteractionChannel;
+
+		const parsed = {
+			content: clonedInteraction.cleanContent || '',
+			author: authorData,
+			guildRoles:
+				clonedInteraction.member?.roles.cache
+					.map((a) => `[${a.name}]`)
+					.join(' ') || '',
+			parentChannelName: clonedInteraction.channel.parent?.name || '',
+			channelName: clonedInteraction.channel.name,
+			channelId: channelData.id,
+			url: clonedInteraction.url,
+		};
+
+		return parsed;
+	} catch (error) {
+		console.log('Error parsing interaction:', error);
+
+		throw error;
 	}
-
-	const channelData =
-		clonedInteraction.channel?.toJSON() as InteractionChannel;
-
-	const parsed = {
-		content: clonedInteraction.cleanContent || '',
-		author: authorData,
-		guildRoles:
-			clonedInteraction.member?.roles.cache
-				.map((a) => `[${a.name}]`)
-				.join(' ') || '',
-		parentChannelName: clonedInteraction.channel.parent?.name || '',
-		channelName: clonedInteraction.channel.name,
-		channelId: channelData.id,
-		url: clonedInteraction.url,
-	};
-
-	return parsed;
 }

@@ -3,7 +3,10 @@ import { botpressChatClient } from './services/botpress';
 import { config } from 'dotenv';
 import { discordClient } from './services/discord';
 import { startHealthCheckBeacon } from './healthcheck';
-import { User as BotpressUser } from '@botpress/chat';
+import {
+	Conversation as BotpressConversation,
+	User as BotpressUser,
+} from '@botpress/chat';
 import {
 	Message as DiscordMessage,
 	User as DiscordUser,
@@ -48,47 +51,73 @@ async function getOrCreateUser(
 	try {
 		const existingUser = await botpressChatClient.getUser({ xChatKey });
 
-		if (!existingUser) {
-			throw new Error('User not found in Botpress');
-		}
-
-		console.log("Found the existing user's data in Botpress");
+		console.log(
+			"[CHAT-SERVER]: Found the existing user's data in Botpress 🔎"
+		);
 
 		return existingUser.user;
 	} catch (error) {
+		console.log(
+			"[CHAT-SERVER]: Error finding the user's data in Botpress ❌",
+			error
+		);
+
 		const newlyCreatedUser = await botpressChatClient.createUser({
 			xChatKey,
 			fid: authorFid,
 		} as any);
 
-		if (!newlyCreatedUser) {
-			throw new Error('Error creating new user in Botpress');
-		}
-
-		console.log('Created a new user in Botpress');
+		console.log('[CHAT-SERVER]: Created a new user in Botpress ✅');
 
 		return newlyCreatedUser.user;
 	}
 }
 
+async function getOrCreateConversation(
+	xChatKey: string,
+	channelFid: string
+): Promise<BotpressConversation | null> {
+	try {
+		const conversation = await botpressChatClient.getOrCreateConversation({
+			xChatKey,
+			fid: channelFid,
+		});
+
+		console.log(
+			'[CHAT-SERVER]: Found the existing conversation data in Botpress 🔎'
+		);
+
+		return conversation.conversation;
+	} catch (error) {
+		console.log(
+			'[CHAT-SERVER]: Error finding the conversation data in Botpress ❌',
+			error
+		);
+
+		return null;
+	}
+}
+
 function checkMessageRestrictions(message: MessageFromDiscord): boolean {
 	if (message.guildId != process.env.DISCORD_SERVER_ID) {
-		console.log('Ignoring message from other server');
+		console.log('[CHAT-SERVER]: Ignoring message from other server ⛔');
 		return false;
 	}
 
 	if (message.system) {
-		console.log('Ignoring system message');
+		console.log('[CHAT-SERVER]: Ignoring system message ⛔');
 		return false;
 	}
 
 	if (message.author?.bot) {
-		console.log('Ignoring message from bot');
+		console.log('[CHAT-SERVER]: Ignoring message from bot ⛔');
 		return false;
 	}
 
 	if (message.channel?.type !== 11) {
-		console.log('Ignoring message from non-thread channel');
+		console.log(
+			'[CHAT-SERVER]: Ignoring message from non-thread channel ⛔'
+		);
 		return false;
 	}
 
@@ -110,18 +139,28 @@ interface ParsedDiscordInteraction {
 
 // listen to new messages from discord
 discordClient.on(Events.MessageCreate, async (interaction) => {
-	console.log("There's a new user message!:", interaction.cleanContent);
+	console.log(
+		"[CHAT-SERVER]: There's a new user message! 🆕",
+		interaction.cleanContent
+	);
 
 	try {
 		if (!checkMessageRestrictions(interaction)) {
 			return;
 		}
 
-		const parsedInteraction: ParsedDiscordInteraction =
+		const parsedInteraction: ParsedDiscordInteraction | null =
 			parseDiscordInteraction(interaction);
 
+		if (!parsedInteraction) {
+			console.log('[CHAT-SERVER]: Could not get parsed interaction ❌');
+			return;
+		}
+
 		if (!parsedInteraction.author || !parsedInteraction.author.id) {
-			console.log('Author data not found in interaction');
+			console.log(
+				'[CHAT-SERVER]: Author data not found in interaction ❌'
+			);
 			return;
 		}
 
@@ -136,12 +175,25 @@ discordClient.on(Events.MessageCreate, async (interaction) => {
 			parsedInteraction.author.id
 		);
 
+		if (!botpressUser) {
+			console.log(
+				'[CHAT-SERVER]: Error finding or creating user in Botpress ❌'
+			);
+			return;
+		}
+
 		// 2. creates a conversation
-		const { conversation } =
-			await botpressChatClient.getOrCreateConversation({
-				xChatKey,
-				fid: parsedInteraction.channelId,
-			});
+		const conversation = await getOrCreateConversation(
+			xChatKey,
+			parsedInteraction.channelId
+		);
+
+		if (!conversation) {
+			console.log(
+				'[CHAT-SERVER]: Error finding or creating conversation in Botpress ❌'
+			);
+			return;
+		}
 
 		const messagePayload: MessagePayload = {};
 
@@ -170,7 +222,7 @@ discordClient.on(Events.MessageCreate, async (interaction) => {
 		};
 
 		// 3. sends the message to botpress
-		console.log('Sending message to Botpress...');
+		console.log('[CHAT-SERVER]: Sending message to Botpress ✉️');
 		await sendMessageToBotpress(
 			xChatKey,
 			conversation.id,
@@ -181,7 +233,7 @@ discordClient.on(Events.MessageCreate, async (interaction) => {
 
 		if (!listeningToConversationsSet.has(conversation.id)) {
 			console.log(
-				`Listening to new conversation (${conversation.id})...`
+				`[CHAT-SERVER]: Listening to new conversation (${conversation.id}) 👂🆕`
 			);
 			listeningToConversationsSet.add(conversation.id);
 			interactionMap.set(conversation.id, interaction);
@@ -189,7 +241,7 @@ discordClient.on(Events.MessageCreate, async (interaction) => {
 			// could add a timeout here
 		} else {
 			console.log(
-				`Already listening to this conversation (${conversation.id})...`
+				`[CHAT-SERVER]: Already listening to this conversation (${conversation.id}) 👂✅`
 			);
 			return;
 		}
@@ -202,7 +254,7 @@ discordClient.on(Events.MessageCreate, async (interaction) => {
 
 		// 5. sends messages from botpress to discord
 		chatListener.on('message_created', async (event) => {
-			console.log('Received message from Botpress...');
+			console.log('[CHAT-SERVER]: Received message from Botpress 💬');
 
 			try {
 				const typedEvent = event as typeof event & {
@@ -214,13 +266,15 @@ discordClient.on(Events.MessageCreate, async (interaction) => {
 				);
 
 				if (!conversationInteraction) {
-					console.log('Interaction not found or has expired...');
+					console.log(
+						'[CHAT-SERVER]: Interaction not found or has expired ⌛❌'
+					);
 					return;
 				}
 
 				if (typedEvent.userId === botpressUser.id) {
 					console.log(
-						'Ignoring message just sent by the current user...'
+						'[CHAT-SERVER]: Ignoring message just sent by the current user 👤❌'
 					);
 					return;
 				}
@@ -234,32 +288,45 @@ discordClient.on(Events.MessageCreate, async (interaction) => {
 					);
 				} else {
 					console.log(
-						"Can't send message to discord, payload is empty or not a string..."
+						"[CHAT-SERVER]: Can't send message to Discord, payload is empty or not a string ❌"
 					);
 				}
 			} catch (error) {
-				console.log('Error sending message to discord:', error);
+				console.log(
+					'[CHAT-SERVER]: Error sending message to Discord ❌',
+					error
+				);
 			}
 		});
 	} catch (error) {
-		console.log('Error when processing message created:', error);
+		console.log(
+			'[CHAT-SERVER]: Error when processing message created ❌',
+			error
+		);
 	}
 });
 
 // send payload to botpress to ignore conversation when message is edited
 discordClient.on(Events.MessageUpdate, async (oldMessage, newMessage) => {
-	console.log('A message was updated!');
+	console.log('[CHAT-SERVER]: A message was updated! 📝');
 
 	try {
 		if (!checkMessageRestrictions(newMessage)) {
 			return;
 		}
 
-		const parsedInteraction: ParsedDiscordInteraction =
+		const parsedInteraction: ParsedDiscordInteraction | null =
 			parseDiscordInteraction(oldMessage);
 
+		if (!parsedInteraction) {
+			console.log('[CHAT-SERVER]: Could not get parsed interaction ❌');
+			return;
+		}
+
 		if (!parsedInteraction.author || !parsedInteraction.author.id) {
-			console.log('Author data not found in interaction');
+			console.log(
+				'[CHAT-SERVER]: Author data not found in interaction ❌'
+			);
 			return;
 		}
 
@@ -269,11 +336,17 @@ discordClient.on(Events.MessageUpdate, async (oldMessage, newMessage) => {
 		);
 
 		// 1. creates a conversation
-		const { conversation } =
-			await botpressChatClient.getOrCreateConversation({
-				xChatKey,
-				fid: parsedInteraction.channelId,
-			});
+		const conversation = await getOrCreateConversation(
+			xChatKey,
+			parsedInteraction.channelId
+		);
+
+		if (!conversation) {
+			console.log(
+				'[CHAT-SERVER]: Error finding or creating conversation in Botpress ❌'
+			);
+			return;
+		}
 
 		const conversationPayload: Partial<ConversationPayload> = {
 			type: 'thread',
@@ -286,9 +359,7 @@ discordClient.on(Events.MessageUpdate, async (oldMessage, newMessage) => {
 
 		// REQ02
 		// 2. sends the payload to ignore to botpress
-		console.log(
-			'Sending message instructions to ignore conversation to Botpress...'
-		);
+		console.log('[CHAT-SERVER]: Sending payload to Botpress ✉️');
 
 		await sendMessageToBotpress(
 			xChatKey,
@@ -301,10 +372,13 @@ discordClient.on(Events.MessageUpdate, async (oldMessage, newMessage) => {
 		listeningToConversationsSet.delete(conversation.id);
 		interactionMap.delete(conversation.id);
 		console.log(
-			`Interaction for conversation ${conversation.id} has been removed due to message edit.`
+			`[CHAT-SERVER]: Interaction for conversation ${conversation.id} has been removed due to message edit 📝`
 		);
 	} catch (error: any) {
-		console.log('Error when processing message updated:', error);
+		console.log(
+			'[CHAT-SERVER]: Error while processing message updated ❌',
+			error
+		);
 	}
 });
 
@@ -328,14 +402,19 @@ async function sendMessageToBotpress(
 				},
 			},
 		});
+
+		console.log('[CHAT-SERVER]: Message sent to Botpress ✅');
 	} catch (error) {
-		console.error('Error sending message to Botpress:', error);
+		console.error(
+			'[CHAT-SERVER]: Error while sending message to Botpress ❌',
+			error
+		);
 	}
 }
 
 function parseDiscordInteraction(
 	interactionRaw: MessageFromDiscord
-): ParsedDiscordInteraction {
+): ParsedDiscordInteraction | null {
 	try {
 		const clonedInteraction = interactionRaw as typeof interactionRaw & {
 			channel: { parent: { name: string } | null; name: string };
@@ -359,8 +438,8 @@ function parseDiscordInteraction(
 
 		return parsed;
 	} catch (error) {
-		console.log('Error parsing interaction:', error);
+		console.log('[CHAT-SERVER]: Error parsing interaction ❌', error);
 
-		throw error;
+		return null;
 	}
 }

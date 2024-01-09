@@ -10,7 +10,6 @@ import {
 	UserPayload,
 } from '../utils/types';
 
-
 config();
 
 const myWebhookId = process.env.BOTPRESS_CHAT_WEBHOOK_ID;
@@ -53,7 +52,7 @@ async function sendMessageToBotpress(
 async function getOrCreateUser(
 	xChatKey: string,
 	authorFid: string
-): Promise<BotpressUser> {
+): Promise<BotpressUser | null> {
 	try {
 		const existingUser = await botpressChatClient.getUser({ xChatKey });
 
@@ -68,14 +67,23 @@ async function getOrCreateUser(
 			error
 		);
 
-		const newlyCreatedUser = await botpressChatClient.createUser({
-			xChatKey,
-			fid: authorFid,
-		} as any);
+		try {
+			const newlyCreatedUser = await botpressChatClient.createUser({
+				xChatKey,
+				fid: authorFid,
+			} as any);
 
-		console.log('[CHAT-SERVER]: Created a new user in Botpress ✅');
+			console.log('[CHAT-SERVER]: Created a new user in Botpress ✅');
 
-		return newlyCreatedUser.user;
+			return newlyCreatedUser.user;
+		} catch (error) {
+			console.log(
+				'[CHAT-SERVER]: Error creating a new user in Botpress ❌',
+				error
+			);
+
+			return null;
+		}
 	}
 }
 
@@ -90,7 +98,7 @@ async function getOrCreateConversation(
 		});
 
 		console.log(
-			'[CHAT-SERVER]: Found the existing conversation data in Botpress 🔎'
+			'[CHAT-SERVER]: Found or created the conversation data in Botpress 🔎'
 		);
 
 		return conversation.conversation;

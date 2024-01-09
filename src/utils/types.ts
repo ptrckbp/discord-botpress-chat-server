@@ -13,7 +13,6 @@ export interface ConversationPayload {
 }
 
 export interface MessagePayload {
-	action?: string;
 	content?: string;
 }
 

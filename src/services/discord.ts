@@ -21,7 +21,6 @@ import {
 	sendMessageToBotpress,
 } from './botpress';
 
-
 // set of conversations that are being listened to
 const listeningToConversationsSet = new Set<string>([]);
 const interactionMap = new Map<string, MessageFromDiscord>();
@@ -96,11 +95,16 @@ export async function handleMessageCreated(interaction: Message) {
 
 		const messagePayload: MessagePayload = {};
 
-		// REQ03
+		// REQ03, REQ13
 		// check if there is an attachment that's not a link preview
 		if (interaction.attachments.size > 0) {
-			console.log('Ignoring message with attachments');
-			messagePayload.action = 'ignore_conversation';
+			console.log('[CHAT-SERVER]: Ignoring message with attachments ❌');
+
+			console.log(
+				'[CHAT-SERVER]: Sending payload to ignore conversation ✉️'
+			);
+
+			messagePayload.content = 'ACTION_Ignore_Conversation';
 		} else {
 			messagePayload.content = parsedInteraction.content;
 		}
@@ -129,6 +133,14 @@ export async function handleMessageCreated(interaction: Message) {
 			messagePayload,
 			userPayload
 		);
+
+		if (messagePayload.content === 'ACTION_Ignore_Conversation') {
+			console.log(
+				'[CHAT-SERVER]: Not adding conversation to listeners because it will be ignored 👂❌'
+			);
+
+			return;
+		}
 
 		if (!listeningToConversationsSet.has(conversation.id)) {
 			console.log(
@@ -182,9 +194,27 @@ export async function handleMessageCreated(interaction: Message) {
 					typedEvent.payload.text ||
 					typeof typedEvent.payload.text === 'string'
 				) {
+					// REQ14
+					if (
+						typedEvent.payload.text ===
+						'STATUS_Conversation_Ignored'
+					) {
+						console.log(
+							'[CHAT-SERVER]: Received status Conversation Ignored, closing listener and removing it from the set 👂💬'
+						);
+
+						chatListener.disconnect();
+						listeningToConversationsSet.delete(conversation.id);
+						interactionMap.delete(conversation.id);
+
+						return;
+					}
+
 					conversationInteraction.reply(
 						typedEvent.payload.text.slice(0, 2000)
 					);
+
+					console.log(`[CHAT-SERVER]: Sent message to Discord ✅`);
 				} else {
 					console.log(
 						"[CHAT-SERVER]: Can't send message to Discord, payload is empty or not a string ❌"
@@ -253,7 +283,7 @@ export async function handleMessageUpdated(
 		};
 
 		const messagePayload: MessagePayload = {
-			action: 'ignore_conversation',
+			content: 'ACTION_Ignore_Conversation',
 		};
 
 		// REQ02

@@ -107,6 +107,7 @@ export async function handleMessageCreated(interaction: Message) {
 			);
 
 			messagePayload.content = 'ACTION_Ignore_Conversation';
+			messagePayload.ignoringReason = 'attachment';
 		} else {
 			messagePayload.content = parsedInteraction.content;
 		}
@@ -287,6 +288,7 @@ export async function handleMessageUpdated(
 
 		const messagePayload: MessagePayload = {
 			content: 'ACTION_Ignore_Conversation',
+			ignoringReason: 'edited',
 		};
 
 		// REQ02

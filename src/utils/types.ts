@@ -14,6 +14,7 @@ export interface ConversationPayload {
 
 export interface MessagePayload {
 	content?: string;
+	ignoringReason?: string;
 }
 
 export interface UserPayload {

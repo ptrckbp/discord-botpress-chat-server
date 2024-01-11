@@ -55,6 +55,8 @@ export async function handleMessageCreated(interaction: Message) {
 			return;
 		}
 
+		console.log('[CHAT-SERVER]: Parsed interaction', parsedInteraction);
+
 		if (!parsedInteraction.author || !parsedInteraction.author.id) {
 			console.log(
 				'[CHAT-SERVER]: Author data not found in interaction ❌'
@@ -134,13 +136,13 @@ export async function handleMessageCreated(interaction: Message) {
 			userPayload
 		);
 
-		if (messagePayload.content === 'ACTION_Ignore_Conversation') {
-			console.log(
-				'[CHAT-SERVER]: Not adding conversation to listeners because it will be ignored 👂❌'
-			);
+		// if (messagePayload.content === 'ACTION_Ignore_Conversation') {
+		// 	console.log(
+		// 		'[CHAT-SERVER]: Not adding conversation to listeners because it will be ignored 👂❌'
+		// 	);
 
-			return;
-		}
+		// 	return;
+		// }
 
 		if (!listeningToConversationsSet.has(conversation.id)) {
 			console.log(
@@ -195,20 +197,21 @@ export async function handleMessageCreated(interaction: Message) {
 					typeof typedEvent.payload.text === 'string'
 				) {
 					// REQ14
-					if (
-						typedEvent.payload.text ===
-						'STATUS_Conversation_Ignored'
-					) {
-						console.log(
-							'[CHAT-SERVER]: Received status Conversation Ignored, closing listener and removing it from the set 👂💬'
-						);
+					// if (
+					// 	typedEvent.payload.text ===
+					// 		'STATUS_Conversation_Ignored' ||
+					// 	typedEvent.payload.text === 'STATUS_Conversation_Closed'
+					// ) {
+					// 	console.log(
+					// 		`[CHAT-SERVER]: Received ${typedEvent.payload.text}, closing listener and removing it from the set 👂💬`
+					// 	);
 
-						chatListener.disconnect();
-						listeningToConversationsSet.delete(conversation.id);
-						interactionMap.delete(conversation.id);
+					// 	chatListener.disconnect();
+					// 	listeningToConversationsSet.delete(conversation.id);
+					// 	interactionMap.delete(conversation.id);
 
-						return;
-					}
+					// 	return;
+					// }
 
 					conversationInteraction.reply(
 						typedEvent.payload.text.slice(0, 2000)

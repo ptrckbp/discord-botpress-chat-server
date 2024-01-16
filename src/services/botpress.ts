@@ -1,5 +1,6 @@
 import { Client as BotpressChatClient } from '@botpress/chat';
 import { config } from 'dotenv';
+import { generateChatKey } from './discord';
 import {
 	Conversation as BotpressConversation,
 	User as BotpressUser,
@@ -19,7 +20,7 @@ const botpressChatClient = new BotpressChatClient({
 });
 
 async function sendMessageToBotpress(
-	xChatKey: string,
+	discordUserId: string,
 	conversationId: string,
 	conversationPayload: ConversationPayload | Partial<ConversationPayload>,
 	messagePayload: MessagePayload,
@@ -27,9 +28,11 @@ async function sendMessageToBotpress(
 ): Promise<void> {
 	try {
 		await botpressChatClient.createMessage({
-			xChatKey,
+			xChatKey: generateChatKey(discordUserId),
 			conversationId,
 			payload: {
+				// stringify message payload
+				// "text": messagePayload.content,
 				type: 'custom',
 				payload: {
 					conversation: conversationPayload,

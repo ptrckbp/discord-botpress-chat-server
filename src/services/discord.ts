@@ -21,7 +21,7 @@ import {
 	sendMessageToBotpress,
 } from './botpress';
 
-function generateChatKey(fid: string): string {
+export function generateChatKey(fid: string): string {
 	return jwt.sign({ fid }, process.env.BOTPRESS_CHAT_ENCRYPTION_KEY || '');
 }
 
@@ -31,6 +31,8 @@ const listenedConversationInteraction = new Map<string, MessageFromDiscord>();
 const channelAuthorMap = new Map<string, string>();
 
 config();
+
+const adminChatKey = generateChatKey(process.env.BOTPRESS_ADMIN_CHAT_FID || '');
 
 const discordClient = new DiscordClient({
 	intents: [
@@ -68,31 +70,43 @@ export async function handleMessageCreated(interaction: Message) {
 			return;
 		}
 
-		let authorChatKey = '';
+		// console.log(
+		// 	`[CHAT-SERVER]: Looking for the thread among ${channelAuthorMap.size} items 🔎`
+		// );
+		// if (channelAuthorMap.has(parsedInteraction.channelId)) {
+		// 	console.log('[CHAT-SERVER]: Found thread for this channel ✅');
 
-		console.log(
-			`[CHAT-SERVER]: Looking for the thread among ${channelAuthorMap.size} items 🔎`
+		// 	authorChatKey = generateChatKey(
+		// 		channelAuthorMap.get(parsedInteraction.channelId) || ''
+		// 	);
+		// } else {
+		// 	console.log('[CHAT-SERVER]: Creating thread for this channel 🆕');
+
+		// 	channelAuthorMap.set(
+		// 		parsedInteraction.channelId,
+		// 		parsedInteraction.author.id
+		// 	);
+
+		// }
+
+		const userChatKey = generateChatKey(parsedInteraction.author.id);
+
+		// 1. gets or creates a conversation
+		const conversation = await getOrCreateConversation(
+			adminChatKey,
+			parsedInteraction.channelId
 		);
-		if (channelAuthorMap.has(parsedInteraction.channelId)) {
-			console.log('[CHAT-SERVER]: Found thread for this channel ✅');
 
-			authorChatKey = generateChatKey(
-				channelAuthorMap.get(parsedInteraction.channelId) || ''
+		if (!conversation) {
+			console.log(
+				'[CHAT-SERVER]: Error finding or creating conversation in Botpress ❌'
 			);
-		} else {
-			console.log('[CHAT-SERVER]: Creating thread for this channel 🆕');
-
-			channelAuthorMap.set(
-				parsedInteraction.channelId,
-				parsedInteraction.author.id
-			);
-
-			authorChatKey = generateChatKey(parsedInteraction.author.id);
+			return;
 		}
 
-		// 1. gets or creates a user in botpress
+		// 2. gets or creates a user in botpress
 		const botpressUser = await getOrCreateUser(
-			authorChatKey,
+			userChatKey,
 			parsedInteraction.author.id
 		);
 
@@ -103,17 +117,30 @@ export async function handleMessageCreated(interaction: Message) {
 			return;
 		}
 
-		// 2. creates a conversation
-		const conversation = await getOrCreateConversation(
-			authorChatKey,
-			parsedInteraction.channelId
+		// every new user
+		console.log(
+			"[CHAT-SERVER]: Looking for user in conversation's participants 🔎"
 		);
+		const conversationParticipants =
+			await botpressChatClient.listParticipants({
+				id: conversation.id,
+				xChatKey: adminChatKey,
+			});
 
-		if (!conversation) {
-			console.log(
-				'[CHAT-SERVER]: Error finding or creating conversation in Botpress ❌'
-			);
-			return;
+		if (
+			!conversationParticipants.participants.find(
+				(participant) => participant.id === botpressUser.id
+			)
+		) {
+			console.log("[CHAT-SERVER]: User wasn't found, adding it ✅");
+
+			await botpressChatClient.addParticipant({
+				id: conversation.id,
+				xChatKey: adminChatKey,
+				userId: botpressUser.id,
+			});
+
+			console.log('[CHAT-SERVER]: User added ✅');
 		}
 
 		const messagePayload: MessagePayload = {};
@@ -151,7 +178,7 @@ export async function handleMessageCreated(interaction: Message) {
 		// 3. sends the message to botpress
 		console.log('[CHAT-SERVER]: Sending message to Botpress ✉️');
 		await sendMessageToBotpress(
-			authorChatKey,
+			parsedInteraction.author.id,
 			conversation.id,
 			conversationPayload,
 			messagePayload,
@@ -186,31 +213,44 @@ export async function handleMessageCreated(interaction: Message) {
 		// 4. listens to messages from botpress
 		const chatListener = await botpressChatClient.listenConversation({
 			id: conversation.id,
-			xChatKey: authorChatKey,
+			xChatKey: adminChatKey,
 		});
 
 		// 5. sends messages from botpress to discord
 		chatListener.on('message_created', async (event) => {
-			console.log('[CHAT-SERVER]: Received message from Botpress 💬');
+			const typedEvent = event as typeof event & {
+				payload: { text: string };
+			};
+
+			if (!typedEvent.payload?.text) {
+				return;
+			}
+
+			console.log(
+				'[CHAT-SERVER]:[BOTPRESS-LISTENER] Received message from Botpress 💬'
+			);
 
 			try {
-				const typedEvent = event as typeof event & {
-					payload: { text: string };
-				};
+				if (!typedEvent.payload) {
+					console.log(
+						'[CHAT-SERVER]:[BOTPRESS-LISTENER] Payload not found ❌'
+					);
+					return;
+				}
 
 				const conversationInteraction =
 					listenedConversationInteraction.get(conversation.id);
 
 				if (!conversationInteraction) {
 					console.log(
-						'[CHAT-SERVER]: Interaction not found or has expired ⌛❌'
+						'[CHAT-SERVER]:[BOTPRESS-LISTENER] Interaction not found or has expired ⌛❌'
 					);
 					return;
 				}
 
 				if (typedEvent.userId === botpressUser.id) {
 					console.log(
-						'[CHAT-SERVER]: Ignoring message just sent by the current user 👤❌'
+						'[CHAT-SERVER]:[BOTPRESS-LISTENER] Ignoring message just sent by the current user 👤❌'
 					);
 					return;
 				}
@@ -240,15 +280,17 @@ export async function handleMessageCreated(interaction: Message) {
 						typedEvent.payload.text.slice(0, 2000)
 					);
 
-					console.log(`[CHAT-SERVER]: Sent message to Discord ✅`);
+					console.log(
+						`[CHAT-SERVER]:[BOTPRESS-LISTENER] Sent message to Discord ✅`
+					);
 				} else {
 					console.log(
-						"[CHAT-SERVER]: Can't send message to Discord, payload is empty or not a string ❌"
+						"[CHAT-SERVER]:[BOTPRESS-LISTENER] Can't send message to Discord, payload is empty or not a string ❌"
 					);
 				}
 			} catch (error) {
 				console.log(
-					'[CHAT-SERVER]: Error sending message to Discord ❌',
+					'[CHAT-SERVER]:[BOTPRESS-LISTENER] Error sending message to Discord ❌',
 					error
 				);
 			}

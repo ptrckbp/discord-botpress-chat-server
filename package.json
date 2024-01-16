@@ -11,7 +11,7 @@
 	"author": "Botpress",
 	"license": "MIT",
 	"dependencies": {
-		"@botpress/chat": "^0.2.1",
+		"@botpress/chat": "^0.2.4",
 		"axios": "^1.6.2",
 		"discord.js": "^14.13.0",
 		"dotenv": "^16.3.1",

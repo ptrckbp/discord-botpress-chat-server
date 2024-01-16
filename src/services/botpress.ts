@@ -69,9 +69,8 @@ async function getOrCreateUser(
 
 		try {
 			const newlyCreatedUser = await botpressChatClient.createUser({
-				xChatKey,
 				fid: authorFid,
-			} as any);
+			});
 
 			console.log('[CHAT-SERVER]: Created a new user in Botpress ✅');
 

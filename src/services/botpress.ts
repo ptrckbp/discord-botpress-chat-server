@@ -1,7 +1,7 @@
-import { Client as BotpressChatClient } from '@botpress/chat';
+import { Client as BotpressChatClient, User } from '@botpress/chat';
 import { config } from 'dotenv';
 import { discordClient, generateChatKey } from './discord';
-import { getConversationData } from './json';
+import { getActiveConversations, getConversationData } from './json';
 import { TextChannel } from 'discord.js';
 import {
 	Conversation as BotpressConversation,
@@ -239,6 +239,83 @@ export async function addConversationListener(
 			);
 		}
 	});
+}
+
+export async function getOrCreateAdminUser(): Promise<User | null> {
+	try {
+		const adminFid = process.env.BOTPRESS_ADMIN_CHAT_FID || '';
+
+		const existingUser = await botpressChatClient.getUser({
+			xChatKey: generateChatKey(adminFid),
+		});
+
+		if (existingUser) {
+			console.log(
+				'[CHAT-SERVER]: Admin user already exists in Botpress ✅'
+			);
+
+			return existingUser.user;
+		} else {
+			console.log(
+				'[CHAT-SERVER]: Admin user does not exist in Botpress ❌'
+			);
+
+			const user = await botpressChatClient.createUser({
+				fid: adminFid,
+				name: 'Admin',
+			});
+
+			console.log('[CHAT-SERVER]: Admin user created in Botpress ✅');
+
+			return user.user;
+		}
+	} catch (error) {
+		console.log(
+			'[CHAT-SERVER]: Error creating or retrieving admin user in Botpress ❌',
+			error
+		);
+
+		return null;
+	}
+}
+
+export async function restoreActiveConversationsListener() {
+	try {
+		console.log('[CHAT-SERVER]: Retrieving active conversations 🔎');
+		const activeConversations = await getActiveConversations();
+
+		console.log(
+			`[CHAT-SERVER]: Found ${
+				Object.keys(activeConversations).length
+			} active conversations 🔎`
+		);
+
+		if (Object.keys(activeConversations).length) {
+			console.log(
+				'[CHAT-SERVER]: Adding listener for active conversations ✅'
+			);
+
+			for (const conversationId in activeConversations) {
+				try {
+					await addConversationListener(conversationId);
+
+					console.log(
+						`[CHAT-SERVER]: Started listening to conversation (${conversationId}) 👂🆕`
+					);
+				} catch (error) {
+					console.log(
+						`[CHAT-SERVER]: Error listening to conversation (${conversationId}) ❌`,
+						error
+					);
+				}
+			}
+		}
+	} catch (error) {
+		console.log(
+			'[CHAT-SERVER]: Error retrieving active conversations from database ❌',
+			error
+		);
+	}
 }
 
 export {

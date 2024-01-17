@@ -12,6 +12,6 @@ const startHealthCheckBeacon = () => {
         console.log('Health check beacon pinged!');
     });
     app.listen(process.env.PORT || 3000);
-    console.log('Server is listening!');
+    console.log('[CHAT-SERVER]: Server is listening ✨');
 };
 exports.startHealthCheckBeacon = startHealthCheckBeacon;

@@ -15,20 +15,22 @@ import {
 	User,
 } from 'discord.js';
 import {
+	addConversationListener,
 	botpressChatClient,
 	getOrCreateConversation,
 	getOrCreateUser,
 	sendMessageToBotpress,
 } from './botpress';
+import {
+	addConversationToActiveList,
+	isConversationBeingListened,
+	removeConversationFromListeningList,
+	updateConversationData,
+} from './json';
 
 export function generateChatKey(fid: string): string {
 	return jwt.sign({ fid }, process.env.BOTPRESS_CHAT_ENCRYPTION_KEY || '');
 }
-
-// set of conversations that are being listened to
-const listenedConversationInteraction = new Map<string, MessageFromDiscord>();
-
-const channelAuthorMap = new Map<string, string>();
 
 config();
 
@@ -132,7 +134,9 @@ export async function handleMessageCreated(interaction: Message) {
 				(participant) => participant.id === botpressUser.id
 			)
 		) {
-			console.log("[CHAT-SERVER]: User wasn't found, adding it ✅");
+			console.log(
+				"[CHAT-SERVER]: User wasn't found in the conversation list, adding it⏳"
+			);
 
 			await botpressChatClient.addParticipant({
 				id: conversation.id,
@@ -140,7 +144,7 @@ export async function handleMessageCreated(interaction: Message) {
 				userId: botpressUser.id,
 			});
 
-			console.log('[CHAT-SERVER]: User added ✅');
+			console.log('[CHAT-SERVER]: User added to conversation list ✅');
 		}
 
 		const messagePayload: MessagePayload = {};
@@ -193,108 +197,35 @@ export async function handleMessageCreated(interaction: Message) {
 		// 	return;
 		// }
 
-		if (!listenedConversationInteraction.has(conversation.id)) {
+		if (await isConversationBeingListened(conversation.id)) {
+			console.log(
+				`[CHAT-SERVER]: Already listening to this conversation 👂✅ `
+			);
+
+			await updateConversationData(conversation.id, {
+				botpressUserId: botpressUser.id,
+			});
+
+			console.log(
+				'[CHAT-SERVER]: Updated conversation with the id of the last user that interacted ✅'
+			);
+
+			return;
+		} else {
 			console.log(
 				`[CHAT-SERVER]: Listening to new conversation (${conversation.id}) 👂🆕`
 			);
 
-			listenedConversationInteraction.set(conversation.id, interaction);
+			await addConversationListener(conversation.id);
+			await addConversationToActiveList(conversation.id, {
+				botpressUserId: botpressUser.id,
+			});
+
+			console.log(
+				'[CHAT-SERVER]: Started listening to conversation and added it to active list ✅'
+			);
 			// could add a timeout here
-		} else {
-			console.log(
-				`[CHAT-SERVER]: Already listening to this conversation (${conversation.id}), updating interaction 👂✅`
-			);
-
-			listenedConversationInteraction.set(conversation.id, interaction);
-
-			return;
 		}
-
-		// 4. listens to messages from botpress
-		const chatListener = await botpressChatClient.listenConversation({
-			id: conversation.id,
-			xChatKey: adminChatKey,
-		});
-
-		// 5. sends messages from botpress to discord
-		chatListener.on('message_created', async (event) => {
-			const typedEvent = event as typeof event & {
-				payload: { text: string };
-			};
-
-			if (!typedEvent.payload?.text) {
-				return;
-			}
-
-			console.log(
-				'[CHAT-SERVER]:[BOTPRESS-LISTENER] Received message from Botpress 💬'
-			);
-
-			try {
-				if (!typedEvent.payload) {
-					console.log(
-						'[CHAT-SERVER]:[BOTPRESS-LISTENER] Payload not found ❌'
-					);
-					return;
-				}
-
-				const conversationInteraction =
-					listenedConversationInteraction.get(conversation.id);
-
-				if (!conversationInteraction) {
-					console.log(
-						'[CHAT-SERVER]:[BOTPRESS-LISTENER] Interaction not found or has expired ⌛❌'
-					);
-					return;
-				}
-
-				if (typedEvent.userId === botpressUser.id) {
-					console.log(
-						'[CHAT-SERVER]:[BOTPRESS-LISTENER] Ignoring message just sent by the current user 👤❌'
-					);
-					return;
-				}
-
-				if (
-					typedEvent.payload.text ||
-					typeof typedEvent.payload.text === 'string'
-				) {
-					// REQ14
-					// if (
-					// 	typedEvent.payload.text ===
-					// 		'STATUS_Conversation_Ignored' ||
-					// 	typedEvent.payload.text === 'STATUS_Conversation_Closed'
-					// ) {
-					// 	console.log(
-					// 		`[CHAT-SERVER]: Received ${typedEvent.payload.text}, closing listener and removing it from the set 👂💬`
-					// 	);
-
-					// 	chatListener.disconnect();
-					// 	listeningToConversationsSet.delete(conversation.id);
-					// 	interactionMap.delete(conversation.id);
-
-					// 	return;
-					// }
-
-					conversationInteraction.reply(
-						typedEvent.payload.text.slice(0, 2000)
-					);
-
-					console.log(
-						`[CHAT-SERVER]:[BOTPRESS-LISTENER] Sent message to Discord ✅`
-					);
-				} else {
-					console.log(
-						"[CHAT-SERVER]:[BOTPRESS-LISTENER] Can't send message to Discord, payload is empty or not a string ❌"
-					);
-				}
-			} catch (error) {
-				console.log(
-					'[CHAT-SERVER]:[BOTPRESS-LISTENER] Error sending message to Discord ❌',
-					error
-				);
-			}
-		});
 	} catch (error) {
 		console.log(
 			'[CHAT-SERVER]: Error when processing message created ❌',
@@ -327,14 +258,9 @@ export async function handleMessageUpdated(
 			return;
 		}
 
-		const xChatKey = jwt.sign(
-			{ fid: parsedInteraction.author.id },
-			process.env.BOTPRESS_CHAT_ENCRYPTION_KEY || ''
-		);
-
 		// 1. creates a conversation
 		const conversation = await getOrCreateConversation(
-			xChatKey,
+			adminChatKey,
 			parsedInteraction.channelId
 		);
 
@@ -360,17 +286,22 @@ export async function handleMessageUpdated(
 		console.log('[CHAT-SERVER]: Sending payload to Botpress ✉️');
 
 		await sendMessageToBotpress(
-			xChatKey,
+			parsedInteraction.author.id,
 			conversation.id,
 			conversationPayload,
 			messagePayload
 		);
 
 		// 4. removes the conversation from the listeners
-		listenedConversationInteraction.delete(conversation.id);
-		console.log(
-			`[CHAT-SERVER]: Interaction for conversation ${conversation.id} has been removed due to message edit 📝`
-		);
+		if (await removeConversationFromListeningList(conversation.id)) {
+			console.log(
+				`[CHAT-SERVER]: Interaction for conversation ${conversation.id} has been removed due to message edit 📝`
+			);
+		} else {
+			console.log(
+				`[CHAT-SERVER]: Interaction for conversation ${conversation.id} could not be removed due to message edit ❌`
+			);
+		}
 	} catch (error: any) {
 		console.log(
 			'[CHAT-SERVER]: Error while processing message updated ❌',

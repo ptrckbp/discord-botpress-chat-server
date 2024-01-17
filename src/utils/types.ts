@@ -37,3 +37,11 @@ export interface ParsedDiscordInteraction {
 	channelId: string;
 	url: string;
 }
+
+export interface ConversationData {
+	botpressUserId: string;
+}
+
+export interface ActiveConversations {
+	[conversationId: string]: ConversationData;
+}

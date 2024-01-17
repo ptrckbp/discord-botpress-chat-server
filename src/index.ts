@@ -1,7 +1,11 @@
-import { botpressChatClient } from './services/botpress';
 import { config } from 'dotenv';
 import { Events } from 'discord.js';
+import { getActiveConversations } from './services/json';
 import { startHealthCheckBeacon } from './healthcheck';
+import {
+	addConversationListener,
+	botpressChatClient,
+} from './services/botpress';
 import {
 	discordClient,
 	generateChatKey,
@@ -16,27 +20,76 @@ function initializeListeners() {
 
 	// create admin user in botpress
 	(async () => {
-		if (
-			await botpressChatClient.getUser({
-				xChatKey: generateChatKey(adminFid),
-			})
-		) {
+		try {
+			if (
+				await botpressChatClient.getUser({
+					xChatKey: generateChatKey(adminFid),
+				})
+			) {
+				console.log(
+					'[CHAT-SERVER]: Admin user already exists in Botpress ✅'
+				);
+			} else {
+				console.log(
+					'[CHAT-SERVER]: Admin user does not exist in Botpress ❌'
+				);
+
+				await botpressChatClient.createUser({
+					fid: adminFid,
+					name: 'Admin',
+				});
+
+				console.log('[CHAT-SERVER]: Admin user created in Botpress ✅');
+			}
+		} catch (error) {
 			console.log(
-				'[CHAT-SERVER]: Admin user already exists in Botpress ✅'
+				'[CHAT-SERVER]: Error creating or retrieving admin user in Botpress ❌',
+				error
 			);
-		} else {
+		}
+
+		// start listening to all conversations stored
+		try {
+			console.log('[CHAT-SERVER]: Retrieving active conversations 🔎');
+			const activeConversations = await getActiveConversations();
+
 			console.log(
-				'[CHAT-SERVER]: Admin user does not exist in Botpress ❌'
+				`[CHAT-SERVER]: Found ${
+					Object.keys(activeConversations).length
+				} active conversations 🔎`
 			);
 
-			await botpressChatClient.createUser({
-				fid: adminFid,
-				name: 'Admin',
-			});
+			if (Object.keys(activeConversations).length) {
+				console.log(
+					'[CHAT-SERVER]: Adding listener for active conversations ✅'
+				);
 
-			console.log('[CHAT-SERVER]: Admin user created in Botpress ✅');
+				for (const conversationId in activeConversations) {
+					try {
+						await addConversationListener(conversationId);
+
+						console.log(
+							`[CHAT-SERVER]: Started listening to conversation (${conversationId}) 👂🆕`
+						);
+					} catch (error) {
+						console.log(
+							`[CHAT-SERVER]: Error listening to conversation (${conversationId}) ❌`,
+							error
+						);
+					}
+				}
+			}
+		} catch (error) {
+			console.log(
+				'[CHAT-SERVER]: Error retrieving active conversations from database ❌',
+				error
+			);
 		}
 	})();
+
+	discordClient.on('ready', () => {
+		console.log('[CHAT-SERVER]: Discord client is ready ✅');
+	});
 
 	// checks if botpress is up and running
 	discordClient.once(Events.ClientReady, startHealthCheckBeacon);

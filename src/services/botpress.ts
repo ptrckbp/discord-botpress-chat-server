@@ -1,6 +1,8 @@
 import { Client as BotpressChatClient } from '@botpress/chat';
 import { config } from 'dotenv';
-import { generateChatKey } from './discord';
+import { discordClient, generateChatKey } from './discord';
+import { getConversationData } from './json';
+import { TextChannel } from 'discord.js';
 import {
 	Conversation as BotpressConversation,
 	User as BotpressUser,
@@ -112,6 +114,131 @@ async function getOrCreateConversation(
 
 		return null;
 	}
+}
+
+export async function addConversationListener(
+	conversationId: string
+	// channelId: string
+) {
+	if (!conversationId) {
+		console.log(
+			'[CHAT-SERVER]:[BOTPRESS-LISTENER] ConversationId not provided ❌'
+		);
+		return;
+	}
+
+	const botpressConversation = await botpressChatClient.getConversation({
+		id: conversationId,
+		xChatKey: generateChatKey(process.env.BOTPRESS_ADMIN_CHAT_FID || ''),
+	});
+
+	if (!botpressConversation) {
+		console.log(
+			'[CHAT-SERVER]:[BOTPRESS-LISTENER] Conversation not found ❌'
+		);
+		return;
+	}
+
+	const channelId = botpressConversation.conversation?.fid;
+
+	if (!channelId) {
+		console.log(
+			"[CHAT-SERVER]:[BOTPRESS-LISTENER] Couldn't find fid info in conversation ❌"
+		);
+		return;
+	}
+
+	const conversationChannel = (await discordClient.channels.fetch(
+		channelId
+	)) as TextChannel;
+
+	if (!conversationChannel) {
+		console.log('[CHAT-SERVER]:[BOTPRESS-LISTENER] Channel not found ❌');
+		return;
+	}
+
+	const chatListener = await botpressChatClient.listenConversation({
+		id: conversationId,
+		xChatKey: generateChatKey(process.env.BOTPRESS_ADMIN_CHAT_FID || ''),
+	});
+
+	chatListener.on('message_created', async (event) => {
+		const typedEvent = event as typeof event & {
+			payload: { text: string };
+		};
+
+		if (!typedEvent.payload?.text) {
+			return;
+		}
+
+		console.log(
+			'[CHAT-SERVER]:[BOTPRESS-LISTENER] Received message from Botpress 💬'
+		);
+
+		try {
+			if (!typedEvent.payload) {
+				console.log(
+					'[CHAT-SERVER]:[BOTPRESS-LISTENER] Payload not found ❌'
+				);
+				return;
+			}
+
+			const conversationData = await getConversationData(conversationId);
+
+			if (!conversationData) {
+				console.log(
+					'[CHAT-SERVER]:[BOTPRESS-LISTENER] Interaction not found or has expired ⌛❌'
+				);
+				return;
+			}
+
+			if (typedEvent.userId === conversationData.botpressUserId) {
+				console.log(
+					'[CHAT-SERVER]:[BOTPRESS-LISTENER] Ignoring message just sent by the current user 👤❌'
+				);
+				return;
+			}
+
+			if (
+				typedEvent.payload.text ||
+				typeof typedEvent.payload.text === 'string'
+			) {
+				// REQ14
+				// if (
+				// 	typedEvent.payload.text ===
+				// 		'STATUS_Conversation_Ignored' ||
+				// 	typedEvent.payload.text === 'STATUS_Conversation_Closed'
+				// ) {
+				// 	console.log(
+				// 		`[CHAT-SERVER]: Received ${typedEvent.payload.text}, closing listener and removing it from the set 👂💬`
+				// 	);
+
+				// 	chatListener.disconnect();
+				// 	listeningToConversationsSet.delete(conversation.id);
+				// 	interactionMap.delete(conversation.id);
+
+				// 	return;
+				// }
+
+				conversationChannel.send(
+					typedEvent.payload.text.slice(0, 2000)
+				);
+
+				console.log(
+					`[CHAT-SERVER]:[BOTPRESS-LISTENER] Sent message to Discord ✅`
+				);
+			} else {
+				console.log(
+					"[CHAT-SERVER]:[BOTPRESS-LISTENER] Can't send message to Discord, payload is empty or not a string ❌"
+				);
+			}
+		} catch (error) {
+			console.log(
+				'[CHAT-SERVER]:[BOTPRESS-LISTENER] Error sending message to Discord ❌',
+				error
+			);
+		}
+	});
 }
 
 export {

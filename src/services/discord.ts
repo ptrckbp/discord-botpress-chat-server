@@ -121,7 +121,7 @@ export async function handleMessageCreated(interaction: Message) {
 
 		// every new user
 		console.log(
-			"[CHAT-SERVER]: Looking for user in conversation's participants 🔎"
+			'[CHAT-SERVER]: Looking for user among conversation participants 🔎'
 		);
 		const conversationParticipants =
 			await botpressChatClient.listParticipants({
@@ -135,7 +135,7 @@ export async function handleMessageCreated(interaction: Message) {
 			)
 		) {
 			console.log(
-				"[CHAT-SERVER]: User wasn't found in the conversation list, adding it⏳"
+				"[CHAT-SERVER]: User wasn't found among conversation participants, adding them... ⏳"
 			);
 
 			await botpressChatClient.addParticipant({
@@ -144,7 +144,9 @@ export async function handleMessageCreated(interaction: Message) {
 				userId: botpressUser.id,
 			});
 
-			console.log('[CHAT-SERVER]: User added to conversation list ✅');
+			console.log(
+				'[CHAT-SERVER]: User added to list of conversation participants ✅'
+			);
 		}
 
 		const messagePayload: MessagePayload = {};

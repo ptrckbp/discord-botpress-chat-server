@@ -19,3 +19,5 @@ spec:
                 scope: RUN_TIME
               - key: BOTPRESS_CHAT_ENCRYPTION_KEY
                 scope: RUN_TIME
+              - key: BOTPRESS_ADMIN_CHAT_FID
+                scope: RUN_TIME

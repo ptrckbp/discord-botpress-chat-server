@@ -2,18 +2,19 @@ import jwt from 'jsonwebtoken';
 import { checkMessageRestrictions } from '../utils/functions';
 import { config } from 'dotenv';
 import {
+	Attachment,
+	Client as DiscordClient,
+	GatewayIntentBits,
+	Message,
+	User,
+} from 'discord.js';
+import {
 	ConversationPayload,
 	MessageFromDiscord,
 	MessagePayload,
 	ParsedDiscordInteraction,
 	UserPayload,
 } from '../utils/types';
-import {
-	Client as DiscordClient,
-	GatewayIntentBits,
-	Message,
-	User,
-} from 'discord.js';
 import {
 	addConversationListener,
 	botpressChatClient,
@@ -65,31 +66,14 @@ export async function handleMessageCreated(interaction: Message) {
 		}
 
 		// console.log('[CHAT-SERVER]: Parsed interaction', parsedInteraction);
+
+		// console.log('[CHAT-SERVER]: Parsed interaction', parsedInteraction);
 		if (!parsedInteraction.author || !parsedInteraction.author.id) {
 			console.log(
 				'[CHAT-SERVER]: Author data not found in interaction ❌'
 			);
 			return;
 		}
-
-		// console.log(
-		// 	`[CHAT-SERVER]: Looking for the thread among ${channelAuthorMap.size} items 🔎`
-		// );
-		// if (channelAuthorMap.has(parsedInteraction.channelId)) {
-		// 	console.log('[CHAT-SERVER]: Found thread for this channel ✅');
-
-		// 	authorChatKey = generateChatKey(
-		// 		channelAuthorMap.get(parsedInteraction.channelId) || ''
-		// 	);
-		// } else {
-		// 	console.log('[CHAT-SERVER]: Creating thread for this channel 🆕');
-
-		// 	channelAuthorMap.set(
-		// 		parsedInteraction.channelId,
-		// 		parsedInteraction.author.id
-		// 	);
-
-		// }
 
 		const userChatKey = generateChatKey(parsedInteraction.author.id);
 
@@ -153,7 +137,7 @@ export async function handleMessageCreated(interaction: Message) {
 
 		// REQ03, REQ13
 		// check if there is an attachment that's not a link preview
-		if (interaction.attachments.size > 0) {
+		if (parsedInteraction.attachments.length > 0) {
 			console.log('[CHAT-SERVER]: Ignoring message with attachments ❌');
 
 			console.log(
@@ -333,6 +317,8 @@ export function parseDiscordInteraction(
 			channelName: clonedInteraction.channel.name,
 			channelId: clonedInteraction.channelId,
 			url: clonedInteraction.url,
+			attachments:
+				(clonedInteraction.attachments?.toJSON() as Attachment[]) || [],
 		};
 
 		return parsed;

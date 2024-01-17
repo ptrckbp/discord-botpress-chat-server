@@ -1,4 +1,5 @@
 import {
+	Attachment,
 	Message as DiscordMessage,
 	User as DiscordUser,
 	PartialMessage as PartialDiscordMessage,
@@ -36,6 +37,7 @@ export interface ParsedDiscordInteraction {
 	channelName: string;
 	channelId: string;
 	url: string;
+	attachments: Attachment[];
 }
 
 export interface ConversationData {

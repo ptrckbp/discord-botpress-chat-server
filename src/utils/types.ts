@@ -23,6 +23,7 @@ export interface UserPayload {
 	nickname: string;
 	name: string | null;
 	authorId: string;
+	botpressUserId?: string;
 }
 
 export type MessageFromDiscord =

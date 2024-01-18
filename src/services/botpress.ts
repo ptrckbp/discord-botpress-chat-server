@@ -21,13 +21,21 @@ const botpressChatClient = new BotpressChatClient({
 	apiUrl: `https://chat.botpress.cloud/${myWebhookId}`,
 });
 
-async function sendMessageToBotpress(
-	discordUserId: string,
-	conversationId: string,
-	conversationPayload: ConversationPayload | Partial<ConversationPayload>,
-	messagePayload: MessagePayload,
-	userPayload?: UserPayload
-): Promise<void> {
+interface InputMessageToBotpress {
+	discordUserId: string;
+	conversationId: string;
+	conversationPayload: ConversationPayload | Partial<ConversationPayload>;
+	messagePayload: MessagePayload;
+	userPayload?: UserPayload;
+}
+
+async function sendMessageToBotpress({
+	discordUserId,
+	conversationId,
+	conversationPayload,
+	messagePayload,
+	userPayload,
+}: InputMessageToBotpress): Promise<void> {
 	try {
 		await botpressChatClient.createMessage({
 			xChatKey: generateChatKey(discordUserId),
@@ -92,12 +100,13 @@ async function getOrCreateUser(
 }
 
 async function getOrCreateConversation(
-	xChatKey: string,
 	channelFid: string
 ): Promise<BotpressConversation | null> {
 	try {
 		const conversation = await botpressChatClient.getOrCreateConversation({
-			xChatKey,
+			xChatKey: generateChatKey(
+				process.env.BOTPRESS_ADMIN_CHAT_FID || ''
+			),
 			fid: channelFid,
 		});
 
@@ -122,7 +131,7 @@ export async function addConversationListener(
 ) {
 	if (!conversationId) {
 		console.log(
-			'[CHAT-SERVER]:[BOTPRESS-LISTENER] ConversationId not provided ❌'
+			"[CHAT-SERVER]:[BOTPRESS-LISTENER] ConversationId wasn't provided ❌"
 		);
 		return;
 	}

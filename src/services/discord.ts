@@ -79,13 +79,12 @@ export async function handleMessageCreated(interaction: Message) {
 
 		// 1. gets or creates a conversation
 		const conversation = await getOrCreateConversation(
-			adminChatKey,
 			parsedInteraction.channelId
 		);
 
 		if (!conversation) {
 			console.log(
-				'[CHAT-SERVER]: Error finding or creating conversation in Botpress ❌'
+				'[CHAT-SERVER]: Could not retrieve the Botpress conversation ❌'
 			);
 			return;
 		}
@@ -97,9 +96,7 @@ export async function handleMessageCreated(interaction: Message) {
 		);
 
 		if (!botpressUser) {
-			console.log(
-				'[CHAT-SERVER]: Error finding or creating user in Botpress ❌'
-			);
+			console.log('[CHAT-SERVER]: Could not retrieve Botpress user ❌');
 			return;
 		}
 
@@ -162,18 +159,19 @@ export async function handleMessageCreated(interaction: Message) {
 			guildRoles: parsedInteraction.guildRoles,
 			nickname: parsedInteraction.author.username,
 			name: parsedInteraction.author.globalName,
-			authorId: parsedInteraction.author.id, // added
+			authorId: parsedInteraction.author.id,
+			botpressUserId: botpressUser.id, // added
 		};
 
 		// 3. sends the message to botpress
 		console.log('[CHAT-SERVER]: Sending message to Botpress ✉️');
-		await sendMessageToBotpress(
-			parsedInteraction.author.id,
-			conversation.id,
+		await sendMessageToBotpress({
+			discordUserId: parsedInteraction.author.id,
+			conversationId: conversation.id,
 			conversationPayload,
 			messagePayload,
-			userPayload
-		);
+			userPayload,
+		});
 
 		// if (messagePayload.content === 'ACTION_Ignore_Conversation') {
 		// 	console.log(
@@ -183,6 +181,7 @@ export async function handleMessageCreated(interaction: Message) {
 		// 	return;
 		// }
 
+		// REQ15
 		if (await isConversationBeingListened(conversation.id)) {
 			console.log(
 				`[CHAT-SERVER]: Already listening to this conversation 👂✅ `
@@ -246,7 +245,6 @@ export async function handleMessageUpdated(
 
 		// 1. creates a conversation
 		const conversation = await getOrCreateConversation(
-			adminChatKey,
 			parsedInteraction.channelId
 		);
 
@@ -254,6 +252,16 @@ export async function handleMessageUpdated(
 			console.log(
 				'[CHAT-SERVER]: Error finding or creating conversation in Botpress ❌'
 			);
+			return;
+		}
+
+		const botpressUser = await getOrCreateUser(
+			generateChatKey(parsedInteraction.author.id),
+			parsedInteraction.author.id
+		);
+
+		if (!botpressUser) {
+			console.log('[CHAT-SERVER]: Could not retrieve Botpress user ❌');
 			return;
 		}
 
@@ -267,16 +275,25 @@ export async function handleMessageUpdated(
 			ignoringReason: 'The user has edited messages',
 		};
 
+		const userPayload: UserPayload = {
+			guildRoles: parsedInteraction.guildRoles,
+			nickname: parsedInteraction.author.username,
+			name: parsedInteraction.author.globalName,
+			authorId: parsedInteraction.author.id, // added
+			botpressUserId: botpressUser.id,
+		};
+
 		// REQ02
 		// 2. sends the payload to ignore to botpress
 		console.log('[CHAT-SERVER]: Sending payload to Botpress ✉️');
 
-		await sendMessageToBotpress(
-			parsedInteraction.author.id,
-			conversation.id,
+		await sendMessageToBotpress({
+			discordUserId: parsedInteraction.author.id,
+			conversationId: conversation.id,
 			conversationPayload,
-			messagePayload
-		);
+			messagePayload,
+			userPayload,
+		});
 
 		// 4. removes the conversation from the listeners
 		if (await removeConversationFromListeningList(conversation.id)) {

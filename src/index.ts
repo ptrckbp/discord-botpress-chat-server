@@ -18,6 +18,7 @@ function initializeListeners() {
 		// get or create admin user in botpress
 		await getOrCreateAdminUser();
 
+		// REQ15
 		// start listening to all conversations stored
 		await restoreActiveConversationsListener();
 	})();

@@ -4,9 +4,9 @@ import { config } from 'dotenv';
 import {
 	Attachment,
 	Client as DiscordClient,
+	User as DiscordUser,
 	GatewayIntentBits,
 	Message,
-	User,
 } from 'discord.js';
 import {
 	ConversationPayload,
@@ -20,6 +20,7 @@ import {
 	botpressChatClient,
 	getOrCreateConversation,
 	getOrCreateUser,
+	getParticipants,
 	sendMessageToBotpress,
 } from './botpress';
 import {
@@ -28,6 +29,8 @@ import {
 	removeConversationFromListeningList,
 	updateConversationData,
 } from './json';
+
+import { Conversation, } from '@botpress/chat';
 
 export function generateChatKey(fid: string): string {
 	return jwt.sign({ fid }, process.env.BOTPRESS_CHAT_ENCRYPTION_KEY || '');
@@ -77,15 +80,102 @@ export async function handleMessageCreated(interaction: Message) {
 
 		const userChatKey = generateChatKey(parsedInteraction.author.id);
 
+		let conversation: Conversation | null = null;
+
 		// 1. gets or creates a conversation
-		const conversation = await getOrCreateConversation(
+		const conversationAdminKey = await getOrCreateConversation(
 			parsedInteraction.channelId
 		);
+
+		if (conversationAdminKey) {
+			console.log(
+				'[CHAT-SERVER]: Retrieved the conversation data in Botpress with admin key 🔎'
+			);
+
+			conversation = conversationAdminKey;
+		} else {
+			console.log(
+				'[CHAT-SERVER]: Could not retrieve the Botpress conversation with admin key ❌'
+			);
+
+			const conversationUserKey = await getOrCreateConversation(
+				parsedInteraction.channelId,
+				userChatKey
+			);
+
+			if (conversationUserKey) {
+				console.log(
+					'[CHAT-SERVER]: Retrieved the conversation data in Botpress with user key 🔎'
+				);
+
+				conversation = conversationUserKey;
+			} else {
+				console.log(
+					'[CHAT-SERVER]: Could not retrieve the Botpress conversation with user key ❌'
+				);
+
+				const allConversations =
+					await botpressChatClient.listConversations({
+						xChatKey: adminChatKey,
+					});
+
+				const thisConversation = allConversations.conversations.find(
+					(c) => c.fid === parsedInteraction.channelId
+				);
+
+				if (thisConversation) {
+					const participants = await getParticipants(
+						adminChatKey,
+						thisConversation.id
+					);
+
+					if (!participants) {
+						console.log(
+							'[CHAT-SERVER]: Could not retrieve the Botpress conversation participants using current user key ❌'
+						);
+						return;
+					}
+
+					const conversationFirstParticipantKey = generateChatKey(
+						participants.sort(
+							(a, b) =>
+								new Date(a.createdAt).getTime() -
+								new Date(b.createdAt).getTime()
+						)[0].fid || ''
+					);
+
+					const conversationFirstParticipant =
+						await getOrCreateConversation(
+							parsedInteraction.channelId,
+							conversationFirstParticipantKey
+						);
+
+					if (conversationFirstParticipant) {
+						console.log(
+							'[CHAT-SERVER]: Retrieved the conversation data in Botpress with first participant key 🔎'
+						);
+
+						conversation = conversationFirstParticipant;
+					} else {
+						console.log(
+							'[CHAT-SERVER]: Could not retrieve the Botpress conversation with first participant key ❌'
+						);
+
+						return;
+					}
+				} else {
+					console.log(
+						'[CHAT-SERVER]: Could not retrieve the Botpress conversation using admin key ❌'
+					);
+				}
+			}
+		}
 
 		if (!conversation) {
 			console.log(
 				'[CHAT-SERVER]: Could not retrieve the Botpress conversation ❌'
 			);
+
 			return;
 		}
 
@@ -100,18 +190,24 @@ export async function handleMessageCreated(interaction: Message) {
 			return;
 		}
 
+		const participants = await getParticipants(
+			userChatKey,
+			conversation.id
+		);
+
+		if (!participants?.length) {
+			console.log(
+				'[CHAT-SERVER]: Could not retrieve the Botpress conversation participants with admin or current user key ❌'
+			);
+			return;
+		}
+
 		// every new user
 		console.log(
 			'[CHAT-SERVER]: Looking for user among conversation participants 🔎'
 		);
-		const conversationParticipants =
-			await botpressChatClient.listParticipants({
-				id: conversation.id,
-				xChatKey: adminChatKey,
-			});
-
 		if (
-			!conversationParticipants.participants.find(
+			!participants.find(
 				(participant) => participant.id === botpressUser.id
 			)
 		) {
@@ -321,7 +417,8 @@ export function parseDiscordInteraction(
 			channel: { parent: { name: string } | null; name: string };
 		};
 
-		const authorData = clonedInteraction.author?.toJSON() as User | null;
+		const authorData =
+			clonedInteraction.author?.toJSON() as DiscordUser | null;
 
 		const parsed = {
 			content: clonedInteraction.cleanContent || '',

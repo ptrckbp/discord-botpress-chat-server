@@ -100,13 +100,14 @@ async function getOrCreateUser(
 }
 
 async function getOrCreateConversation(
-	channelFid: string
+	channelFid: string,
+	xChatKey?: string
 ): Promise<BotpressConversation | null> {
 	try {
 		const conversation = await botpressChatClient.getOrCreateConversation({
-			xChatKey: generateChatKey(
-				process.env.BOTPRESS_ADMIN_CHAT_FID || ''
-			),
+			xChatKey:
+				xChatKey ||
+				generateChatKey(process.env.BOTPRESS_ADMIN_CHAT_FID || ''),
 			fid: channelFid,
 		});
 
@@ -325,6 +326,66 @@ export async function restoreActiveConversationsListener() {
 			error
 		);
 	}
+}
+
+export async function getConversationParticipants(
+	conversationId: string
+): Promise<User[]> {
+	const userList = await botpressChatClient.listParticipants({
+		id: conversationId,
+		xChatKey: generateChatKey(process.env.BOTPRESS_ADMIN_CHAT_FID || ''),
+	});
+
+	return userList.participants;
+}
+
+export async function getParticipants(
+	userChatKey: string,
+	conversationId: string
+): Promise<User[] | null> {
+	console.log(
+		'[CHAT-SERVER]: Retrieving the Botpress conversation participants 🔎'
+	);
+
+	const participants: BotpressUser[] = [];
+
+	const conversationParticipantsUserKey = (
+		await botpressChatClient.listParticipants({
+			xChatKey: userChatKey,
+			id: conversationId,
+		})
+	).participants;
+
+	if (conversationParticipantsUserKey) {
+		console.log(
+			'[CHAT-SERVER]: Retrieved the Botpress conversation participants using current user key 🔎'
+		);
+
+		participants.push(...conversationParticipantsUserKey);
+	} else {
+		console.log(
+			'[CHAT-SERVER]: Could not retrieve the Botpress conversation participants using current user key ❌ Trying with admin'
+		);
+
+		const conversationParticipantsAdminKey =
+			await getConversationParticipants(conversationId);
+
+		if (conversationParticipantsAdminKey) {
+			console.log(
+				'[CHAT-SERVER]: Retrieved the Botpress conversation participants using admin key 🔎'
+			);
+
+			participants.push(...conversationParticipantsAdminKey);
+		} else {
+			console.log(
+				'[CHAT-SERVER]: Could not retrieve the Botpress conversation participants using current user key ❌'
+			);
+
+			return null;
+		}
+	}
+
+	return participants;
 }
 
 export {

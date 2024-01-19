@@ -41,14 +41,12 @@ async function sendMessageToBotpress({
 			xChatKey: generateChatKey(discordUserId),
 			conversationId,
 			payload: {
-				// stringify message payload
-				// "text": messagePayload.content,
-				type: 'custom',
-				payload: {
+				type: 'text',
+				text: JSON.stringify({
 					conversation: conversationPayload,
 					message: messagePayload,
 					user: userPayload,
-				},
+				}),
 			},
 		});
 
@@ -329,17 +327,6 @@ export async function restoreActiveConversationsListener() {
 }
 
 export async function getConversationParticipants(
-	conversationId: string
-): Promise<User[]> {
-	const userList = await botpressChatClient.listParticipants({
-		id: conversationId,
-		xChatKey: generateChatKey(process.env.BOTPRESS_ADMIN_CHAT_FID || ''),
-	});
-
-	return userList.participants;
-}
-
-export async function getParticipants(
 	userChatKey: string,
 	conversationId: string
 ): Promise<User[] | null> {
@@ -349,26 +336,15 @@ export async function getParticipants(
 
 	const participants: BotpressUser[] = [];
 
-	const conversationParticipantsUserKey = (
-		await botpressChatClient.listParticipants({
-			xChatKey: userChatKey,
-			id: conversationId,
-		})
-	).participants;
-
-	if (conversationParticipantsUserKey) {
-		console.log(
-			'[CHAT-SERVER]: Retrieved the Botpress conversation participants using current user key 🔎'
-		);
-
-		participants.push(...conversationParticipantsUserKey);
-	} else {
-		console.log(
-			'[CHAT-SERVER]: Could not retrieve the Botpress conversation participants using current user key ❌ Trying with admin'
-		);
-
-		const conversationParticipantsAdminKey =
-			await getConversationParticipants(conversationId);
+	try {
+		const conversationParticipantsAdminKey = (
+			await botpressChatClient.listParticipants({
+				id: conversationId,
+				xChatKey: generateChatKey(
+					process.env.BOTPRESS_ADMIN_CHAT_FID || ''
+				),
+			})
+		).participants;
 
 		if (conversationParticipantsAdminKey) {
 			console.log(
@@ -376,16 +352,40 @@ export async function getParticipants(
 			);
 
 			participants.push(...conversationParticipantsAdminKey);
-		} else {
+		}
+
+		return participants;
+	} catch (error) {
+		console.log(
+			'[CHAT-SERVER]: Could not retrieve the Botpress conversation participants using admin key ❌. Trying it with the current user key...'
+		);
+
+		try {
+			const conversationParticipantsUserKey = (
+				await botpressChatClient.listParticipants({
+					xChatKey: userChatKey,
+					id: conversationId,
+				})
+			).participants;
+
+			if (conversationParticipantsUserKey) {
+				console.log(
+					'[CHAT-SERVER]: Retrieved the Botpress conversation participants using current user key 🔎'
+				);
+
+				participants.push(...conversationParticipantsUserKey);
+			}
+
+			return participants;
+		} catch (error) {
 			console.log(
-				'[CHAT-SERVER]: Could not retrieve the Botpress conversation participants using current user key ❌'
+				'[CHAT-SERVER]: Could not retrieve the Botpress conversation participants using current user key ❌ :',
+				error
 			);
 
 			return null;
 		}
 	}
-
-	return participants;
 }
 
 export {

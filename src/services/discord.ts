@@ -18,9 +18,9 @@ import {
 import {
 	addConversationListener,
 	botpressChatClient,
+	getConversationParticipants,
 	getOrCreateConversation,
 	getOrCreateUser,
-	getParticipants,
 	sendMessageToBotpress,
 } from './botpress';
 import {
@@ -30,7 +30,7 @@ import {
 	updateConversationData,
 } from './json';
 
-import { Conversation, } from '@botpress/chat';
+import { Conversation } from '@botpress/chat';
 
 export function generateChatKey(fid: string): string {
 	return jwt.sign({ fid }, process.env.BOTPRESS_CHAT_ENCRYPTION_KEY || '');
@@ -124,8 +124,8 @@ export async function handleMessageCreated(interaction: Message) {
 				);
 
 				if (thisConversation) {
-					const participants = await getParticipants(
-						adminChatKey,
+					const participants = await getConversationParticipants(
+						userChatKey,
 						thisConversation.id
 					);
 
@@ -190,7 +190,7 @@ export async function handleMessageCreated(interaction: Message) {
 			return;
 		}
 
-		const participants = await getParticipants(
+		const participants = await getConversationParticipants(
 			userChatKey,
 			conversation.id
 		);
